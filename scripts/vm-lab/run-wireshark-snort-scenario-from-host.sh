@@ -34,7 +34,9 @@ die() {
 validate_lab_ip() {
   case "$1" in
     192.168.56.*) ;;
-    *) die "IP '$1' bukan subnet lab 192.168.56.x. Script dihentikan." ;;
+    10.*|172.*|127.*|169.254.*|0.*|255.*) die "IP '$1' bukan subnet lab 192.168.56.x. Script dihentikan." ;;
+    *.*.*.*) die "IP '$1' tidak diizinkan. Gunakan subnet VM lokal 192.168.56.x saja." ;;
+    *) die "IP '$1' tidak valid." ;;
   esac
 }
 
@@ -96,6 +98,7 @@ main() {
 
   local remote_pcap="$TARGET_LAB_DIR/captures/${SCENARIO}-wireshark.pcapng"
   local remote_alert="$TARGET_LAB_DIR/validation/${SCENARIO}-snort.log"
+  local remote_metrics="$TARGET_LAB_DIR/validation/${SCENARIO}-target-metrics.csv"
   mkdir -p "$LOCAL_CAPTURE_DIR"
 
   log "Copy file akuisisi dan validasi ke host"

@@ -16,7 +16,9 @@ die() {
 validate_lab_ip() {
   case "$1" in
     192.168.56.*) ;;
-    *) die "IP '$1' bukan subnet lab 192.168.56.x. Script dihentikan." ;;
+    10.*|172.*|127.*|169.254.*|0.*|255.*) die "IP '$1' bukan subnet lab 192.168.56.x. Script dihentikan." ;;
+    *.*.*.*) die "IP '$1' tidak diizinkan. Gunakan subnet VM lokal 192.168.56.x saja." ;;
+    *) die "IP '$1' tidak valid." ;;
   esac
 }
 

@@ -20,7 +20,7 @@
             <li><span class="text-slate-200">Snort 3</span> — IDS/IPS untuk validasi alert.</li>
             <li><span class="text-slate-200">iPerf3</span> — baseline traffic normal & pengukuran bandwidth.</li>
             <li><span class="text-slate-200">Traffic generator lab rate-limited</span> — generator traffic uji lab.</li>
-            <li><span class="text-slate-200">ESP32</span> — rencana node akuisisi metadata di tahap berikutnya (placeholder).</li>
+            <li><span class="text-slate-200">Target VM telemetry</span> - metrik koneksi aktif, resource usage, capture Wireshark, dan alert Snort dari VM target lokal.</li>
         </ul>
     </div>
 </div>
@@ -82,7 +82,7 @@
                 <li>Tahap lanjutan: integrasi dengan firmware kustom untuk pengukuran trafik lokal di skala IoT.</li>
             </ol>
             <div class="mt-3 p-3 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-200 text-xs">
-                Halaman ini hanya placeholder. Dashboard belum berkomunikasi dengan ESP32.
+                Halaman ini merangkum alur lab lokal. Data eksperimen tetap berasal dari file akuisisi, validasi Snort, dan metrik target yang diunggah ke dashboard.
             </div>
         </div>
     </div>

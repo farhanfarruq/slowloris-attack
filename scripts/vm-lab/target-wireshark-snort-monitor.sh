@@ -22,8 +22,60 @@ die() {
 validate_lab_ip() {
   case "$1" in
     192.168.56.*) ;;
-    *) die "IP '$1' bukan subnet lab 192.168.56.x. Script dihentikan." ;;
+    10.*|172.*|127.*|169.254.*|0.*|255.*) die "IP '$1' bukan subnet lab 192.168.56.x. Script dihentikan." ;;
+    *.*.*.*) die "IP '$1' tidak diizinkan. Gunakan subnet VM lokal 192.168.56.x saja." ;;
+    *) die "IP '$1' tidak valid." ;;
   esac
+}
+
+tcp_state_count() {
+  local state="$1"
+  ss -Htan 2>/dev/null | awk -v state="$state" '
+    $1 == state && ($4 ~ /:80$/ || $5 ~ /:80$/) { count++ }
+    END { print count + 0 }
+  '
+}
+
+tcp_attacker_count() {
+  ss -Htan 2>/dev/null | awk -v attacker="$ATTACKER_IP" '
+    $4 ~ attacker || $5 ~ attacker { count++ }
+    END { print count + 0 }
+  '
+}
+
+load_one_minute() {
+  awk '{ print $1 }' /proc/loadavg 2>/dev/null || printf '0
+'
+}
+
+mem_available_kb() {
+  awk '/^MemAvailable:/ { print $2 }' /proc/meminfo 2>/dev/null || printf '0
+'
+}
+
+sockstat_tcp_inuse() {
+  awk '/^TCP:/ {
+    for (i = 1; i <= NF; i++) {
+      if ($i == "inuse") {
+        print $(i + 1)
+        exit
+      }
+    }
+  }' /proc/net/sockstat 2>/dev/null || printf '0
+'
+}
+
+metrics_loop() {
+  local metrics_file="$1"
+
+  printf '%s
+' 'timestamp_epoch,scenario,tcp_established_port80,tcp_syn_recv_port80,tcp_close_wait_port80,tcp_attacker_total,load_1m,mem_available_kb,sockstat_tcp_inuse' >"$metrics_file"
+
+  while true; do
+    printf '%s,%s,%s,%s,%s,%s,%s,%s,%s
+'       "$(date +%s)"       "$SCENARIO"       "$(tcp_state_count ESTAB)"       "$(tcp_state_count SYN-RECV)"       "$(tcp_state_count CLOSE-WAIT)"       "$(tcp_attacker_count)"       "$(load_one_minute)"       "$(mem_available_kb)"       "$(sockstat_tcp_inuse)" >>"$metrics_file"
+    sleep 2
+  done
 }
 
 capture_filter_for() {
@@ -56,11 +108,12 @@ main() {
   local tmp_snort_dir="/tmp/vm-lab-${SCENARIO}-snort"
   local final_capture="$capture_dir/${SCENARIO}-wireshark.pcapng"
   local final_alert="$validation_dir/${SCENARIO}-snort.log"
+  local final_metrics="$validation_dir/${SCENARIO}-target-metrics.csv"
   local dumpcap_log="$log_dir/${SCENARIO}-dumpcap.log"
   local snort_log="$log_dir/${SCENARIO}-snort-run.log"
 
   mkdir -p "$capture_dir" "$validation_dir" "$log_dir"
-  rm -f "$final_capture" "$final_alert" "$dumpcap_log" "$snort_log"
+  rm -f "$final_capture" "$final_alert" "$final_metrics" "$dumpcap_log" "$snort_log"
   sudo rm -rf "$tmp_capture" "$tmp_snort_dir"
   sudo mkdir -p "$tmp_snort_dir"
 
@@ -73,11 +126,17 @@ main() {
   sudo timeout "${CAPTURE_SECONDS}s" snort -A fast -q -c "$SNORT_CONF" -i "$TARGET_IFACE" -l "$tmp_snort_dir" >"$snort_log" 2>&1 &
   local snort_pid=$!
 
+  log "Mulai sampling metrik target: $final_metrics"
+  metrics_loop "$final_metrics" &
+  local metrics_pid=$!
+
   set +e
   wait "$dumpcap_pid"
   local dumpcap_status=$?
   wait "$snort_pid"
   local snort_status=$?
+  kill "$metrics_pid" >/dev/null 2>&1 || true
+  wait "$metrics_pid" >/dev/null 2>&1 || true
   set -e
 
   if [[ "$dumpcap_status" -ne 0 && "$dumpcap_status" -ne 124 ]]; then
@@ -99,10 +158,12 @@ main() {
     : >"$final_alert"
   fi
   sudo chmod 644 "$final_alert"
+  chmod 644 "$final_metrics"
   sudo rm -rf "$tmp_snort_dir"
 
   log "Selesai capture: $(du -h "$final_capture" | awk '{print $1}')"
   log "Selesai alert: $(du -h "$final_alert" | awk '{print $1}')"
+  log "Selesai metrik: $(du -h "$final_metrics" | awk '{print $1}')"
 }
 
 main "$@"
