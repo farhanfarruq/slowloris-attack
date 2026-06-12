@@ -1,0 +1,223 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+    .card {
+        @apply bg-white border border-gray-200 rounded-lg shadow-sm;
+    }
+    .card-header {
+        @apply px-5 py-4 border-b border-gray-200 flex items-center justify-between;
+    }
+    .card-title {
+        @apply text-sm font-bold text-gray-950;
+    }
+    .brand-logo-frame {
+        @apply shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm;
+    }
+    .brand-logo-frame--login {
+        @apply h-20 w-20 p-2;
+    }
+    .brand-logo-frame--sidebar {
+        @apply h-12 w-12 p-1.5;
+    }
+    .brand-logo-frame--topbar {
+        @apply h-10 w-10 p-1;
+    }
+    .brand-logo-image {
+        @apply h-full w-full object-contain;
+    }
+    .stat-card {
+        @apply card p-5 hover:border-blue-300 transition;
+    }
+    .btn {
+        @apply inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition border;
+    }
+    .btn-primary {
+        @apply btn border-blue-600 bg-blue-600 text-white hover:bg-blue-700 hover:border-blue-700;
+    }
+    .btn-danger {
+        @apply btn border-red-200 bg-red-50 text-red-700 hover:bg-red-100;
+    }
+    .btn-ghost {
+        @apply btn border-gray-200 bg-white text-gray-700 hover:bg-gray-50;
+    }
+    .btn-success {
+        @apply btn border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100;
+    }
+    .input-field {
+        @apply w-full px-3 py-2 rounded-md bg-white border border-gray-300 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 text-sm;
+    }
+    .label-field {
+        @apply text-xs uppercase tracking-wider text-gray-700 font-semibold mb-1.5 block;
+    }
+    .table-stripe {
+        @apply min-w-full text-sm;
+    }
+    .table-stripe th {
+        @apply text-left text-[11px] uppercase tracking-wider text-gray-700 font-bold px-3 py-2.5 border-b border-gray-200 bg-gray-50;
+    }
+    .table-stripe td {
+        @apply px-3 py-2.5 text-gray-900 border-b border-gray-100;
+    }
+    .badge {
+        @apply inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold border;
+    }
+    .badge-cyan { @apply badge bg-blue-50 text-blue-700 border-blue-200; }
+    .badge-emerald { @apply badge bg-emerald-50 text-emerald-700 border-emerald-200; }
+    .badge-amber { @apply badge bg-amber-50 text-amber-700 border-amber-200; }
+    .badge-rose { @apply badge bg-red-50 text-red-700 border-red-200; }
+    .badge-slate { @apply badge bg-gray-50 text-gray-700 border-gray-200; }
+    .status-summary-card {
+        @apply rounded-lg border p-3 shadow-sm;
+    }
+    .status-summary-label {
+        @apply text-[11px] uppercase tracking-wider font-bold;
+    }
+    .status-summary-value {
+        @apply mt-1.5 text-2xl font-bold;
+    }
+    .status-summary-card--normal {
+        @apply border-emerald-300 bg-emerald-50 text-emerald-950;
+    }
+    .status-summary-card--suspicious {
+        @apply border-amber-300 bg-amber-50 text-amber-950;
+    }
+    .status-summary-card--attack {
+        @apply border-red-300 bg-red-50 text-red-950;
+    }
+    .status-summary-card--inconclusive {
+        @apply border-indigo-300 bg-indigo-50 text-indigo-950;
+    }
+    .status-summary-card--pending {
+        @apply border-zinc-400 bg-zinc-100 text-zinc-950;
+    }
+    .decision-summary-row {
+        @apply flex items-center justify-between rounded-lg border px-4 py-3 shadow-sm;
+    }
+    .decision-summary-label,
+    .decision-summary-value {
+        @apply text-sm font-bold;
+    }
+    .decision-summary-dot {
+        @apply h-2.5 w-2.5 rounded-full;
+    }
+    .decision-summary-row--attack {
+        @apply border-red-300 bg-red-50 text-red-950;
+    }
+    .decision-summary-row--attack .decision-summary-dot {
+        @apply bg-red-700;
+    }
+    .decision-summary-row--normal {
+        @apply border-emerald-300 bg-emerald-50 text-emerald-950;
+    }
+    .decision-summary-row--normal .decision-summary-dot {
+        @apply bg-emerald-700;
+    }
+    .decision-summary-row--review {
+        @apply border-amber-300 bg-amber-50 text-amber-950;
+    }
+    .decision-summary-row--review .decision-summary-dot {
+        @apply bg-amber-700;
+    }
+    .decision-summary-row--neutral {
+        @apply border-zinc-400 bg-zinc-100 text-zinc-950;
+    }
+    .decision-summary-row--neutral .decision-summary-dot {
+        @apply bg-zinc-800;
+    }
+    .score-pill {
+        @apply inline-flex min-w-32 flex-col rounded-md border px-3 py-2 shadow-sm;
+    }
+    .score-pill-value {
+        @apply font-mono text-base font-bold leading-none;
+    }
+    .score-pill-label {
+        @apply mt-1 text-[11px] font-bold leading-tight;
+    }
+    .score-result-card {
+        @apply rounded-lg border p-4 shadow-sm;
+    }
+    .score-result-caption {
+        @apply text-xs uppercase tracking-wider font-bold;
+    }
+    .score-result-value {
+        @apply mt-1 text-3xl font-bold;
+    }
+    .score-result-category {
+        @apply mt-1 text-sm font-bold;
+    }
+    .score-scale-card {
+        @apply rounded-lg border p-3 shadow-sm;
+    }
+    .score-scale-range {
+        @apply text-[11px] uppercase tracking-wider font-bold;
+    }
+    .score-scale-label {
+        @apply mt-1 text-sm font-bold leading-tight;
+    }
+    .score-tone-normal {
+        @apply border-emerald-300 bg-emerald-100 text-emerald-950;
+    }
+    .score-tone-suspicious {
+        @apply border-amber-300 bg-amber-100 text-amber-950;
+    }
+    .score-tone-possible {
+        @apply border-orange-300 bg-orange-100 text-orange-950;
+    }
+    .score-tone-strong {
+        @apply border-red-300 bg-red-100 text-red-950;
+    }
+    .score-tone-neutral {
+        @apply border-zinc-400 bg-zinc-100 text-zinc-950;
+    }
+}
+
+[x-cloak] { display: none !important; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.35); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(107, 114, 128, 0.45); }
+
+body { background: #f8fafc; color: #111827; }
+
+.text-white,
+.text-slate-50,
+.text-slate-100,
+.text-slate-200,
+.text-slate-300 { color: #111827 !important; }
+
+.text-slate-400,
+.text-slate-500,
+.text-slate-600 { color: #374151 !important; }
+
+.text-cyan-200,
+.text-cyan-300,
+.text-cyan-400 { color: #2563eb !important; }
+
+.bg-slate-950,
+.bg-slate-900,
+.bg-slate-800,
+.bg-slate-950\/90,
+.bg-slate-950\/80,
+.bg-slate-950\/60,
+.bg-slate-900\/70,
+.bg-slate-900\/60,
+.bg-slate-800\/70,
+.bg-slate-800\/60,
+.bg-slate-800\/40 { background-color: #ffffff !important; }
+
+.border-slate-900,
+.border-slate-800,
+.border-slate-700,
+.border-slate-800\/70,
+.border-slate-800\/40,
+.border-slate-700\/60 { border-color: #e5e7eb !important; }
+
+.hover\:bg-slate-800:hover,
+.hover\:bg-slate-800\/60:hover,
+.hover\:bg-slate-800\/40:hover { background-color: #f3f4f6 !important; }
+
+.hover\:text-slate-100:hover { color: #111827 !important; }
+
+code { color: #1d4ed8; }

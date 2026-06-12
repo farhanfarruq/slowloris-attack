@@ -1,0 +1,31 @@
+{
+  "experiment_id": "EXP-DEMO",
+  "experiment_name": "Slowloris Lab Demo",
+  "packet_summary": {
+    "total_packets": 18420,
+    "tcp_packets": 17200,
+    "http_packets": 8200,
+    "avg_packet_size": 214,
+    "duration_seconds": 600
+  },
+  "connection_summary": {
+    "total_connections": 1250,
+    "long_lived_connections": 870,
+    "avg_connection_duration_seconds": 145,
+    "connections_to_http_port": 1180,
+    "throughput_kbps": 44,
+    "half_open_connections": 870
+  },
+  "top_source_ips": {
+    "192.168.56.5": 17900,
+    "192.168.56.6": 320
+  },
+  "top_destination_ips": {
+    "192.168.56.10": 18100
+  },
+  "protocol_distribution": {
+    "TCP": 17200,
+    "HTTP": 8200,
+    "DNS": 220
+  }
+}
