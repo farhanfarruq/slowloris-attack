@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-SCENARIO="${SCENARIO:-slow-http}"
+SCENARIO="${SCENARIO:-baseline-normal}"
 ATTACKER_SSH="${ATTACKER_SSH:-attacker@192.168.56.102}"
 TARGET_SSH="${TARGET_SSH:-target@192.168.56.103}"
 ATTACKER_IP="${ATTACKER_IP:-192.168.56.102}"
@@ -17,8 +17,7 @@ PORTS="${PORTS:-22,80,443,5201,8000}"
 PARALLEL="${PARALLEL:-2}"
 BANDWIDTH="${BANDWIDTH:-10M}"
 MONITOR_WAIT_TIMEOUT="${MONITOR_WAIT_TIMEOUT:-$((CAPTURE_SECONDS + 30))}"
-TARGET_USER="${TARGET_SSH%@*}"
-TARGET_LAB_DIR="${TARGET_LAB_DIR:-/home/$TARGET_USER/slowloris-lab}"
+TARGET_LAB_DIR="${TARGET_LAB_DIR:-slowloris-lab}"
 LOCAL_CAPTURE_DIR="${LOCAL_CAPTURE_DIR:-$PWD/storage/app/vm-lab-captures}"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -42,11 +41,12 @@ validate_lab_ip() {
 
 attacker_script_for() {
   case "$SCENARIO" in
+    baseline-normal) printf '%s\n' "$SCRIPT_DIR/attacker-baseline-normal.sh" ;;
     http-burst) printf '%s\n' "$SCRIPT_DIR/attacker-http-burst.sh" ;;
     slow-http) printf '%s\n' "$SCRIPT_DIR/attacker-slow-http.sh" ;;
     portscan) printf '%s\n' "$SCRIPT_DIR/attacker-portscan.sh" ;;
     iperf-bandwidth) printf '%s\n' "$SCRIPT_DIR/attacker-iperf-bandwidth.sh" ;;
-    *) die "SCENARIO tidak dikenal: $SCENARIO" ;;
+    *) die "SCENARIO tidak dikenal: $SCENARIO. Gunakan baseline-normal, slow-http, http-burst, portscan, atau iperf-bandwidth" ;;
   esac
 }
 
@@ -102,13 +102,15 @@ main() {
   mkdir -p "$LOCAL_CAPTURE_DIR"
 
   log "Copy file akuisisi dan validasi ke host"
-  ssh "$TARGET_SSH" "test -s '$remote_pcap' && test -e '$remote_alert'"
+  ssh "$TARGET_SSH" "test -s '$remote_pcap' && test -e '$remote_alert' && test -s '$remote_metrics'"
   scp "$TARGET_SSH:$remote_pcap" "$LOCAL_CAPTURE_DIR/"
   scp "$TARGET_SSH:$remote_alert" "$LOCAL_CAPTURE_DIR/"
+  scp "$TARGET_SSH:$remote_metrics" "$LOCAL_CAPTURE_DIR/"
 
   log "Selesai:"
   printf '%s\n' "$LOCAL_CAPTURE_DIR/${SCENARIO}-wireshark.pcapng"
   printf '%s\n' "$LOCAL_CAPTURE_DIR/${SCENARIO}-snort.log"
+  printf '%s\n' "$LOCAL_CAPTURE_DIR/${SCENARIO}-target-metrics.csv"
 }
 
 main "$@"

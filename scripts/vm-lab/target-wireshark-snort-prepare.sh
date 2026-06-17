@@ -64,7 +64,7 @@ main() {
   local tmp_rules
   tmp_rules="$(mktemp)"
   cat >"$tmp_rules" <<EOF
-alert tcp $ATTACKER_IP any -> $TARGET_IP 80 (msg:"LOCAL LAB possible Slow HTTP or Slowloris traffic"; flow:to_server,established; detection_filter:track by_src, count 30, seconds 60; sid:1000001; rev:1;)
+alert tcp $ATTACKER_IP any -> $TARGET_IP 80 (msg:"LOCAL LAB possible Slow HTTP or Slowloris traffic"; flow:to_server,established; detection_filter:track by_src, count 20, seconds 60; sid:1000001; rev:2;)
 alert tcp $ATTACKER_IP any -> $TARGET_IP 80 (msg:"LOCAL LAB high HTTP request burst"; flow:to_server,established; detection_filter:track by_src, count 200, seconds 10; sid:1000002; rev:1;)
 alert tcp $ATTACKER_IP any -> $TARGET_IP any (msg:"LOCAL LAB repeated TCP connection attempts"; detection_filter:track by_src, count 40, seconds 20; sid:1000003; rev:1;)
 EOF

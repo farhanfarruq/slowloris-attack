@@ -17,7 +17,7 @@ class ValidationParser
 {
     public function parse(string $absolutePath, string $extension): array
     {
-        $extension = strtolower($extension);
+        $extension = strtolower(pathinfo($extension, PATHINFO_EXTENSION) ?: $extension);
         $alerts = match ($extension) {
             'json'        => $this->parseJson($absolutePath),
             'csv'         => $this->parseCsv($absolutePath),
@@ -234,6 +234,7 @@ class ValidationParser
             'parsed_summary'           => [
                 'parser'   => 'snort',
                 'unique_messages' => count($msgCount),
+                'severity_count' => $sevCount,
             ],
         ];
     }

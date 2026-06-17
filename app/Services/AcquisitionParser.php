@@ -18,7 +18,7 @@ class AcquisitionParser
 {
     public function parse(string $absolutePath, string $extension): array
     {
-        $extension = strtolower($extension);
+        $extension = strtolower(pathinfo($extension, PATHINFO_EXTENSION) ?: $extension);
 
         return match ($extension) {
             'csv'             => $this->parseCsv($absolutePath),
@@ -153,12 +153,15 @@ class AcquisitionParser
                 . ' -E separator=' . escapeshellarg("\t")
                 . ' -E occurrence=f'
                 . ' -e frame.len'
+                . ' -e frame.time_epoch'
                 . ' -e frame.protocols'
                 . ' -e ip.src'
                 . ' -e ip.dst'
                 . ' -e tcp.stream'
                 . ' -e tcp.srcport'
                 . ' -e tcp.dstport'
+                . ' -e tcp.flags.fin'
+                . ' -e tcp.flags.reset'
                 . ' 2>/dev/null';
 
             $fieldsOutput = @shell_exec($fieldsCmd);
@@ -178,8 +181,8 @@ class AcquisitionParser
                         continue;
                     }
 
-                    [$len, $protoStack, $src, $dst, $stream, $srcPort, $dstPort] =
-                        array_pad(explode("\t", $line), 7, '');
+                    [$len, $timeEpoch, $protoStack, $src, $dst, $stream, $srcPort, $dstPort, $tcpFin, $tcpReset] =
+                        array_pad(explode("\t", $line), 10, '');
 
                     $total++;
                     $length = (int) $len;
@@ -205,13 +208,72 @@ class AcquisitionParser
                         $destinations[$dst] = ($destinations[$dst] ?? 0) + 1;
                     }
                     if ($stream !== '') {
-                        $streams[$stream] = true;
+                        if (!isset($streams[$stream])) {
+                            $streams[$stream] = [
+                                'first' => null,
+                                'last' => null,
+                                'http_port' => false,
+                                'closed' => false,
+                            ];
+                        }
+
+                        $timestamp = is_numeric($timeEpoch) ? (float) $timeEpoch : null;
+                        if ($timestamp !== null) {
+                            $streams[$stream]['first'] = $streams[$stream]['first'] === null
+                                ? $timestamp
+                                : min($streams[$stream]['first'], $timestamp);
+                            $streams[$stream]['last'] = $streams[$stream]['last'] === null
+                                ? $timestamp
+                                : max($streams[$stream]['last'], $timestamp);
+                        }
+
+                        if ($srcPort === '80' || $dstPort === '80') {
+                            $streams[$stream]['http_port'] = true;
+                        }
+
+                        if ($tcpFin === '1' || $tcpReset === '1') {
+                            $streams[$stream]['closed'] = true;
+                        }
                     }
                 }
 
                 arsort($sources);
                 arsort($destinations);
                 arsort($protocols);
+
+                $streamDurations = [];
+                $longLivedConnections = 0;
+                $connectionsToHttpPort = 0;
+                $openHttpConnections = 0;
+
+                foreach ($streams as $stream) {
+                    if (!empty($stream['http_port'])) {
+                        $connectionsToHttpPort++;
+                    }
+
+                    if ($stream['first'] !== null && $stream['last'] !== null) {
+                        $duration = max(0.0, (float) $stream['last'] - (float) $stream['first']);
+                        $streamDurations[] = $duration;
+
+                        if ($duration >= 60.0) {
+                            $longLivedConnections++;
+                        }
+                    }
+
+                    if (!empty($stream['http_port']) && empty($stream['closed'])) {
+                        $openHttpConnections++;
+                    }
+                }
+
+                $durationSeconds = $streamDurations
+                    ? max($streamDurations)
+                    : null;
+                $avgConnectionDuration = $streamDurations
+                    ? round(array_sum($streamDurations) / count($streamDurations), 2)
+                    : null;
+                $throughputKbps = ($durationSeconds && $durationSeconds > 0 && $lengths)
+                    ? round((array_sum($lengths) * 8) / 1000 / $durationSeconds, 2)
+                    : null;
 
                 return [
                     'total_packets'        => $total,
@@ -222,11 +284,16 @@ class AcquisitionParser
                     'top_destination_ips'  => array_slice($destinations, 0, 10, true),
                     'protocol_distribution'=> $protocols,
                     'total_connections'    => count($streams) ?: null,
-                    'avg_connection_duration' => null,
-                    'half_open_connections'=> null,
+                    'avg_connection_duration' => $avgConnectionDuration,
+                    'half_open_connections'=> $openHttpConnections ?: null,
                     'parsed_summary'       => [
                         'parser' => 'tshark-fields',
                         'note'   => 'HTTP dihitung dari decoded HTTP atau TCP port 80.',
+                        'duration' => $durationSeconds,
+                        'throughput_kbps' => $throughputKbps,
+                        'long_lived_connections' => $longLivedConnections,
+                        'connections_to_http_port' => $connectionsToHttpPort,
+                        'open_http_connections' => $openHttpConnections,
                     ],
                 ];
             }

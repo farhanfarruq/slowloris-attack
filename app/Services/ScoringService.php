@@ -37,8 +37,9 @@ use App\Models\ValidationFile;
  *   - HTTP harus dominan: http_packets/total_packets >= 0.10 (Slowloris pasti via HTTP).
  *   - Bukti gabungan: minimal 2 dari 3 berikut TRUE:
  *       a) snort_alert_score >= 30 ATAU dominant alert match Slow HTTP/Slowloris
- *       b) connection_duration_score >= 60
- *       c) low_bandwidth_high_connection_score >= 60
+ *       b) connection_duration_score >= 60 ATAU long_lived_connections >= 20
+ *       c) low_bandwidth_high_connection_score >= 60 ATAU koneksi HTTP long-lived
+ *          tinggi dengan throughput rendah
  *   - Skenario non-Slowloris (http-burst, iperf-bandwidth, portscan, normal-baseline)
  *     diblok, hanya boleh sampai Suspicious kecuali bukti override Snort sangat kuat.
  */
@@ -107,6 +108,9 @@ class ScoringService
         $highAlerts   = (float) ($sev['high'] ?? 0);
         $mediumAlerts = (float) ($sev['medium'] ?? 0);
         $lowAlerts    = (float) ($sev['low'] ?? 0);
+        if (($highAlerts + $mediumAlerts + $lowAlerts) <= 0 && $totalAlerts > 0) {
+            $lowAlerts = $totalAlerts;
+        }
 
         return [
             'total_packets'             => $totalPackets,
@@ -135,7 +139,7 @@ class ScoringService
         // Slow factor: 0..1, mendekati 1 ketika rata-rata durasi koneksi >= 30 detik.
         $slowFactor = $this->slowFactor((float) ($f['avg_connection_duration'] ?? 0));
 
-        // 1) Connection duration: butuh banyak long-lived, bukan cuma rata-rata 1 koneksi panjang.
+        // 1) Connection duration: butuh durasi panjang atau volume long-lived yang besar.
         $connScore = 0.0;
         if (($f['avg_connection_duration'] ?? 0) > 0) {
             $base = ($f['avg_connection_duration'] / 180.0) * 100;
@@ -143,6 +147,7 @@ class ScoringService
             // Damp jika long_lived_connections sangat sedikit (<20).
             $longLived = (float) ($f['long_lived_connections'] ?? 0);
             $longLivedFactor = min(1.0, $longLived / 20.0);
+            $baselineConnections = max(20.0, (float) ($f['baseline_avg_connections'] ?? self::BASELINE_DEFAULT_CONNECTIONS));
 
             // Jika data long_lived_connections tidak tersedia (0), pakai durasi saja
             // namun tetap di-damp 70% untuk menghindari satu koneksi panjang menyulut skor.
@@ -150,7 +155,12 @@ class ScoringService
                 $longLivedFactor = 0.7;
             }
 
-            $connScore = $this->clamp($base * $longLivedFactor);
+            $durationScore = $this->clamp($base * $longLivedFactor);
+            $longLivedVolumeScore = $longLived >= 20
+                ? $this->clamp(($longLived / $baselineConnections) * 100)
+                : 0.0;
+
+            $connScore = max($durationScore, $longLivedVolumeScore);
         }
 
         // 2) Header anomaly: tanpa fallback dari indikator lain. 0 jika data tidak tersedia.
@@ -318,8 +328,19 @@ class ScoringService
         // Gate 2: minimal 2 dari 3 sinyal Slowloris.
         $a = (float) ($radar['snort_alert_score'] ?? 0) >= 30
             || $this->dominantAlertMatchesSlowHttp((string) ($ctx['dominant_alert_type'] ?? ''));
-        $b = (float) ($radar['connection_duration_score'] ?? 0) >= 60;
-        $c = (float) ($radar['low_bandwidth_high_connection_score'] ?? 0) >= 60;
+        $longLivedConnections = (float) ($f['long_lived_connections'] ?? 0);
+        $httpPortConnections = (float) ($f['connections_to_http_port'] ?? 0);
+        $throughputKbps = (float) ($f['throughput_kbps'] ?? 0);
+
+        $b = (float) ($radar['connection_duration_score'] ?? 0) >= 60
+            || $longLivedConnections >= 20;
+        $c = (float) ($radar['low_bandwidth_high_connection_score'] ?? 0) >= 60
+            || (
+                $longLivedConnections >= 20
+                && $httpPortConnections >= 20
+                && $throughputKbps > 0
+                && $throughputKbps <= 50
+            );
 
         $flags['signal_snort_relevant']     = $a;
         $flags['signal_long_lived']         = $b;

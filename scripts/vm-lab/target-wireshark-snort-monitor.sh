@@ -85,7 +85,7 @@ capture_filter_for() {
   fi
 
   case "$SCENARIO" in
-    http-burst|slow-http) printf '%s\n' 'tcp port 80' ;;
+    baseline-normal|http-burst|slow-http) printf '%s\n' 'tcp port 80' ;;
     iperf-bandwidth) printf '%s\n' 'tcp port 5201' ;;
     portscan) printf '%s\n' 'tcp' ;;
     *) printf '%s\n' "host $ATTACKER_IP and host $TARGET_IP" ;;
