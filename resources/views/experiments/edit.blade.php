@@ -3,6 +3,14 @@
 @section('title', 'Edit Eksperimen ' . $experiment->experiment_code)
 
 @section('content')
+@php
+    $trafficLabels = [
+        'unknown' => 'unknown',
+        'normal' => 'normal',
+        'slowloris_lab' => 'attack lab',
+        'mixed' => 'mixed',
+    ];
+@endphp
 <div class="card max-w-3xl">
     <div class="card-header"><p class="card-title">Edit Metadata</p></div>
     <form action="{{ route('experiments.update', $experiment) }}" method="POST" class="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -20,7 +28,17 @@
             <label class="label-field">Tipe Traffic *</label>
             <select name="traffic_type" class="input-field" required>
                 @foreach (['unknown','normal','slowloris_lab','mixed'] as $t)
-                    <option value="{{ $t }}" @selected($experiment->traffic_type===$t)>{{ str_replace('_',' ',$t) }}</option>
+                    <option value="{{ $t }}" @selected($experiment->traffic_type===$t)>{{ $trafficLabels[$t] ?? str_replace('_',' ',$t) }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div>
+            <label class="label-field">Tool Profile *</label>
+            <select name="tool_profile" class="input-field" required>
+                @foreach ($toolProfiles as $profile)
+                    <option value="{{ $profile['key'] }}" @selected(old('tool_profile', $experiment->tool_profile ?: 'slowloris') === $profile['key'])>
+                        {{ $profile['label'] }} @if($profile['owner']) - {{ $profile['owner'] }} @endif
+                    </option>
                 @endforeach
             </select>
         </div>
@@ -32,11 +50,29 @@
             <p class="text-[11px] text-slate-500 mt-1">Identitas skenario untuk memasangkan PCAP dan log validasi.</p>
         </div>
         <div>
+            <label class="label-field">Attack Pattern</label>
+            <input name="attack_pattern" type="text" class="input-field"
+                   value="{{ old('attack_pattern', $experiment->attack_pattern) }}"
+                   placeholder="slow_http / http_flood / tcp_syn_flood">
+            <p class="text-[11px] text-slate-500 mt-1">Metadata teknis, bukan identitas utama penelitian.</p>
+        </div>
+        <div>
+            <label class="label-field">Analysis Profile Key</label>
+            <input name="analysis_profile_key" type="text" class="input-field"
+                   value="{{ old('analysis_profile_key', $experiment->analysis_profile_key) }}"
+                   placeholder="otomatis mengikuti tool_profile">
+        </div>
+        <div>
+            <label class="label-field">Target Platform</label>
+            <input name="target_platform" type="text" class="input-field"
+                   value="{{ old('target_platform', $experiment->target_platform ?: 'vm_ubuntu_server') }}">
+        </div>
+        <div>
             <label class="label-field">Ground Truth Label</label>
             <select name="ground_truth_label" class="input-field">
                 <option value="">—</option>
                 @foreach (['normal','slowloris_lab','mixed','unknown'] as $t)
-                    <option value="{{ $t }}" @selected($experiment->ground_truth_label===$t)>{{ str_replace('_',' ',$t) }}</option>
+                    <option value="{{ $t }}" @selected($experiment->ground_truth_label===$t)>{{ $trafficLabels[$t] ?? str_replace('_',' ',$t) }}</option>
                 @endforeach
             </select>
         </div>

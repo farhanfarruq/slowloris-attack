@@ -20,6 +20,11 @@ Semua skenario wajib menghasilkan dua file: `*-wireshark.pcapng` untuk akuisisi 
 | `docs/serangan-02-slow-http.md` | Slow HTTP headers dengan slowhttptest | `slow-http-wireshark.pcapng` + `slow-http-snort.log` |
 | `docs/serangan-03-portscan.md` | TCP connect port scan dengan Nmap | `portscan-wireshark.pcapng` + `portscan-snort.log` |
 | `docs/serangan-04-iperf-bandwidth.md` | Bandwidth pressure dengan iPerf3 | `iperf-bandwidth-wireshark.pcapng` + `iperf-bandwidth-snort.log` |
+| `docs/serangan-05-loic.md` | LOIC HTTP/TCP/UDP flood dengan ab dan hping3 | `loic-wireshark.pcapng` + `loic-snort.log` |
+| `docs/serangan-06-hoic.md` | HOIC high-rate HTTP flood multi-path | `hoic-wireshark.pcapng` + `hoic-snort.log` |
+| `docs/serangan-07-hping3.md` | Hping3 TCP SYN / UDP / ICMP flood transport-layer | `hping3-wireshark.pcapng` + `hping3-snort.log` |
+| `docs/serangan-08-torshammer.md` | Torshammer Slow HTTP POST body + Slow Read | `torshammer-wireshark.pcapng` + `torshammer-snort.log` |
+| `docs/serangan-09-xerxes.md` | Xerxes high-rate connection + HTTP flood keep-alive | `xerxes-wireshark.pcapng` + `xerxes-snort.log` |
 | `docs/lab-wireshark-snort-shell.md` | Runner shell Wireshark/dumpcap + Snort | `storage/app/vm-lab-captures/*-wireshark.pcapng` dan `*-snort.log` |
 | `docs/manual-experiment-upload-validation.md` | Flow manual website: experiment, upload PCAP, upload Snort, pairing, analisis | Web dashboard |
 
@@ -75,6 +80,11 @@ http-burst
 slow-http
 portscan
 iperf-bandwidth
+loic
+hoic
+hping3
+torshammer
+xerxes
 ```
 
 ## Import ke Dashboard

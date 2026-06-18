@@ -64,7 +64,7 @@
             </div>
 
             <div class="mt-5 text-[11px] text-slate-500 space-y-1">
-                <p>• Ground truth <code>slowloris_lab</code> & <code>mixed</code> = Attack.</p>
+                <p>• Ground truth attack lab & <code>mixed</code> = Attack.</p>
                 <p>• Status sistem <code>attack_detected</code> & <code>suspicious</code> = Attack.</p>
                 <p>• Eksperimen tanpa ground truth atau status pending diabaikan.</p>
             </div>

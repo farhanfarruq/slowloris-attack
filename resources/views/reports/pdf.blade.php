@@ -77,19 +77,19 @@
     </tr>
     <tr>
         <td>AI Confidence</td><td>{{ $f->ai_confidence_score }}</td>
-        <td><strong>Final Attack Score</strong></td><td><strong>{{ $f->final_attack_score }} ({{ $f->attack_category }})</strong></td>
+        <td><strong>Final Attack Score</strong></td><td><strong>{{ $f->final_attack_score }} ({{ \App\Support\AttackPresentation::scoreLabel($f->attack_category) }})</strong></td>
     </tr>
 </table>
 @endif
 
-<h2>7. Hasil Validasi AI</h2>
+<h2>7. Hasil AI Analysis</h2>
 @if ($aiResults->count())
 <table class="scores">
     <tr><td><strong>Model</strong></td><td><strong>Klasifikasi</strong></td><td><strong>Confidence</strong></td><td><strong>Reason</strong></td></tr>
     @foreach ($aiResults as $r)
         <tr>
             <td>{{ $r->model_name }} {{ $r->is_simulated ? '(sim)' : '' }}</td>
-            <td>{{ $r->classification }}</td>
+            <td>{{ \App\Support\AttackPresentation::classificationLabel($r->classification) }}</td>
             <td>{{ $r->confidence_score }}%</td>
             <td>{{ \Illuminate\Support\Str::limit($r->reason, 180) }}</td>
         </tr>
@@ -101,7 +101,7 @@
 
 <h2>8. Voting & Keputusan Akhir</h2>
 <table class="kv">
-    <tr><td>Final Decision</td><td>{{ $report->final_decision }}</td></tr>
+    <tr><td>Final Decision</td><td>{{ \App\Support\AttackPresentation::decisionLabel($report->final_decision) }}</td></tr>
     <tr><td>Avg Confidence</td><td>{{ $report->voting_average_confidence }}%</td></tr>
 </table>
 
@@ -114,8 +114,8 @@
 <div style="margin-top: 20px; padding: 10px; border: 1px solid #f59e0b; background: #fffbeb; color: #92400e; font-size: 11px; border-radius: 4px;">
     <strong>Disclaimer wajib:</strong>
     Hasil ini hanya berlaku untuk eksperimen pada VM lab lokal terisolasi (subnet 192.168.56.0/24).
-    Klasifikasi seperti "Serangan asli" hanya muncul ketika bukti gabungan (Wireshark + Snort + pola koneksi)
-    memenuhi gate evidence sistem; klasifikasi "Indikasi Slowloris" / "Suspicious" berarti diperlukan validasi lanjutan.
+    Klasifikasi "Attack Detected" hanya muncul ketika bukti gabungan (Wireshark + Snort + pola koneksi)
+    memenuhi gate evidence sistem; klasifikasi "Possible Attack" / "Suspicious" berarti diperlukan validasi lanjutan.
     Hasil ini tidak boleh digeneralisasi ke lingkungan produksi atau dipakai sebagai bukti tunggal serangan ke target publik.
 </div>
 
@@ -123,7 +123,7 @@
 <p>{{ $report->recommendations }}</p>
 
 <div class="footer">
-    Slowloris Lab - {{ now()->format('d M Y H:i') }}
+    Network Attack Analysis Lab - {{ now()->format('d M Y H:i') }}
 </div>
 
 </body>

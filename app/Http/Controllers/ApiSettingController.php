@@ -4,23 +4,27 @@ namespace App\Http\Controllers;
 
 use App\Models\AiProviderSetting;
 use App\Services\AiValidationService;
+use App\Services\ToolProfileService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 
 class ApiSettingController extends Controller
 {
-    public function __construct(private AiValidationService $ai)
-    {
+    public function __construct(
+        private AiValidationService $ai,
+        private ToolProfileService $toolProfiles,
+    ) {
     }
 
     public function index()
     {
         $providers = $this->ai->listProviderSettings();
+        $toolProfiles = $this->toolProfiles->options();
         $useSimulation = config('ai.use_simulation');
         $defaultProvider = config('ai.default_provider');
 
-        return view('settings.api', compact('providers', 'useSimulation', 'defaultProvider'));
+        return view('settings.api', compact('providers', 'toolProfiles', 'useSimulation', 'defaultProvider'));
     }
 
     public function store(Request $request)
@@ -28,6 +32,7 @@ class ApiSettingController extends Controller
         $data = $request->validate([
             'provider_key' => ['nullable', 'string', 'max:80', 'regex:/^[a-z0-9_\\-]+$/'],
             'provider_label' => ['required', 'string', 'max:120'],
+            'tool_profile' => ['nullable', Rule::in($this->toolProfiles->keys())],
             'driver' => ['required', Rule::in(['openai_compatible', 'gemini', 'ollama'])],
             'api_key' => ['nullable', 'string', 'max:5000'],
             'api_url' => ['nullable', 'url', 'max:500'],
@@ -43,6 +48,7 @@ class ApiSettingController extends Controller
 
         $setting = AiProviderSetting::firstOrNew(['provider_key' => $providerKey]);
         $setting->provider_label = $data['provider_label'];
+        $setting->tool_profile = $data['tool_profile'] ?? null;
         $setting->driver = $data['driver'];
         $setting->api_url = $data['api_url'] ?? null;
         $setting->model = $data['model'] ?? null;

@@ -32,7 +32,7 @@ visudo -cf /etc/sudoers.d/vm-lab-target'"
 
   log "Setup sudo terbatas di Attacker. Masukkan password user Attacker jika diminta."
   ssh -tt "$ATTACKER_SSH" "sudo sh -c 'cat > /etc/sudoers.d/vm-lab-attacker <<EOF
-$ATTACKER_USER ALL=(ALL) NOPASSWD: /usr/sbin/ip
+$ATTACKER_USER ALL=(ALL) NOPASSWD: /usr/sbin/ip, /usr/sbin/hping3, /usr/bin/hping3, /sbin/hping3
 EOF
 chmod 440 /etc/sudoers.d/vm-lab-attacker
 visudo -cf /etc/sudoers.d/vm-lab-attacker'"

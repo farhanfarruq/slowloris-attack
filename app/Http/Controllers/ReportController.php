@@ -52,7 +52,7 @@ class ReportController extends Controller
         $features = $experiment->extractedFeature;
         $scoring = new \App\Services\ScoringService();
         $reportFinalDecision = $features
-            ? $scoring->categoryToFinalDecision($features->attack_category ?? 'Inconclusive')
+            ? $scoring->categoryToFinalDecision($features->attack_category ?? 'Inconclusive', $experiment->tool_profile ?? null)
             : 'Inconclusive';
 
         // Pastikan keterbatasan terisi dengan disclaimer wajib jika user tidak menulis apa-apa.

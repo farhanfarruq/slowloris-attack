@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Experiment;
 use App\Services\AiValidationService;
+use App\Services\AnalysisComparisonService;
 use App\Services\AuditService;
+use App\Services\ToolProfileService;
 use Illuminate\Http\Request;
 
 class AiValidationController extends Controller
@@ -12,16 +14,20 @@ class AiValidationController extends Controller
     public function __construct(
         private AiValidationService $ai,
         private AuditService $audit,
+        private ToolProfileService $toolProfiles,
+        private AnalysisComparisonService $comparison,
     ) {
     }
 
-    public function index()
+    public function index(Request $request)
     {
         $experiments = Experiment::with(['extractedFeature', 'aiResults'])
-            ->latest()->paginate(15);
+            ->when($request->get('tool_profile'), fn ($q, $profile) => $q->where('tool_profile', $this->toolProfiles->normalize($profile)))
+            ->latest()->paginate(15)->withQueryString();
         $providers = $this->ai->listProviders();
+        $toolProfiles = $this->toolProfiles->options();
 
-        return view('ai.index', compact('experiments', 'providers'));
+        return view('ai.index', compact('experiments', 'providers', 'toolProfiles'));
     }
 
     public function show(Experiment $experiment)
@@ -29,8 +35,9 @@ class AiValidationController extends Controller
         $providers = $this->ai->listProviders();
         $results = $this->ai->latestResults($experiment);
         $vote = $this->ai->vote($experiment);
+        $comparisons = $this->comparison->forExperiment($experiment);
 
-        return view('ai.show', compact('experiment', 'providers', 'vote', 'results'));
+        return view('ai.show', compact('experiment', 'providers', 'vote', 'results', 'comparisons'));
     }
 
     public function run(Request $request, Experiment $experiment)
@@ -59,7 +66,7 @@ class AiValidationController extends Controller
 
         if (!empty($notReady)) {
             return back()->withErrors([
-                'providers' => 'Provider belum siap untuk live AI: ' . implode(', ', $notReady)
+                'providers' => 'Provider belum siap untuk live AI Analysis: ' . implode(', ', $notReady)
                     . '. Isi API key dan aktifkan live API terlebih dahulu.',
             ]);
         }
@@ -72,11 +79,11 @@ class AiValidationController extends Controller
             $results = $this->ai->runForExperiment($experiment, $providers);
         } catch (\Throwable $e) {
             return back()->withErrors([
-                'providers' => 'Validasi AI gagal: ' . $e->getMessage(),
+                'providers' => 'AI Analysis gagal: ' . $e->getMessage(),
             ]);
         }
 
-        $this->audit->log('ai.validated', $experiment, [
+        $this->audit->log('ai.analyzed', $experiment, [
             'providers' => $providers,
             'count'     => count($results),
         ]);
@@ -93,6 +100,8 @@ class AiValidationController extends Controller
         return response()->json([
             'experiment_id'  => $experiment->experiment_code,
             'experiment_name'=> $experiment->name,
+            'tool_profile'   => $experiment->tool_profile,
+            'attack_pattern' => $experiment->attack_pattern,
             'results'        => $results,
             'voting'         => $vote,
         ]);
@@ -103,7 +112,7 @@ class AiValidationController extends Controller
         $acquisition = $experiment->acquisitionFiles()->latest()->first();
 
         if (!$acquisition) {
-            return 'Validasi AI ditolak: upload file akuisisi dulu.';
+            return 'AI Analysis ditolak: upload file akuisisi dulu.';
         }
 
         $validation = $experiment->validationFiles()
@@ -112,7 +121,7 @@ class AiValidationController extends Controller
             ->first();
 
         if (!$validation) {
-            return 'Validasi AI ditolak: file validasi Snort harus dipasangkan dengan file akuisisi terbaru.';
+            return 'AI Analysis ditolak: file validasi Snort harus dipasangkan dengan file akuisisi terbaru.';
         }
 
         return null;

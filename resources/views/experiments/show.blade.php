@@ -12,13 +12,10 @@
         'normal' => 'emerald', 'suspicious' => 'amber',
         'attack_detected' => 'rose', 'inconclusive' => 'slate', 'pending' => 'slate',
     ][$experiment->experiment_status] ?? 'slate';
-    $scoreTone = fn (?string $category) => match ($category) {
-        'Normal' => 'score-tone-normal',
-        'Suspicious' => 'score-tone-suspicious',
-        'Possible Slowloris' => 'score-tone-possible',
-        'Strong Slowloris Indication' => 'score-tone-strong',
-        default => 'score-tone-neutral',
-    };
+    $scoreTone = fn (?string $category) => \App\Support\AttackPresentation::scoreTone($category);
+    $scoreLabel = fn (?string $category) => \App\Support\AttackPresentation::scoreLabel($category);
+    $classificationLabel = fn (?string $classification) => \App\Support\AttackPresentation::classificationLabel($classification);
+    $classificationColor = fn (?string $classification) => \App\Support\AttackPresentation::classificationColor($classification);
 @endphp
 
 <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -96,13 +93,13 @@
                 <div class="mt-4 score-result-card {{ $scoreTone($features->attack_category) }}">
                     <p class="score-result-caption">Final Attack Score</p>
                     <p class="score-result-value">{{ $features->final_attack_score }}</p>
-                    <p class="score-result-category">{{ $features->attack_category }}</p>
+                    <p class="score-result-category">{{ $scoreLabel($features->attack_category) }}</p>
                 </div>
                 <p class="mt-3 text-[11px] text-slate-500 leading-relaxed">
                     <strong>Status eksperimen:</strong>
                     <span class="text-slate-300">{{ str_replace('_',' ',$experiment->experiment_status) }}</span>.
-                    Kategori "Possible Slowloris" dipetakan ke <code>suspicious</code>.
-                    Hanya "Strong Slowloris Indication" yang lulus gate evidence
+                    Kategori "Possible Attack" dipetakan ke <code>suspicious</code>.
+                    Hanya "Attack Detected" yang lulus gate evidence
                     (Snort relevan + koneksi long-lived + low-bw·high-conn) yang dipetakan ke
                     <code>attack_detected</code> / "Serangan asli".
                 </p>
@@ -158,7 +155,7 @@
         </div>
         <div class="overflow-x-auto">
             <table class="table-stripe">
-                <thead><tr><th>File</th><th>Pasangan</th><th>Mode</th><th>Total</th><th>Severity</th><th>Slow HTTP?</th><th></th></tr></thead>
+                <thead><tr><th>File</th><th>Pasangan</th><th>Mode</th><th>Total</th><th>Severity</th><th>Pattern Match?</th><th></th></tr></thead>
                 <tbody>
                     @forelse ($experiment->validationFiles as $f)
                         <tr>
@@ -197,7 +194,7 @@
 
 <div class="card mt-4">
     <div class="card-header">
-        <p class="card-title">Hasil Validasi AI</p>
+        <p class="card-title">Hasil AI Analysis</p>
         <div class="flex gap-2">
             <a href="{{ route('ai.show', $experiment) }}" class="text-xs text-cyan-300 hover:text-cyan-200">Jalankan AI →</a>
             <a href="{{ route('ai.export', $experiment) }}" class="text-xs text-emerald-300 hover:text-emerald-200">Export JSON</a>
@@ -212,20 +209,22 @@
                         <td class="text-slate-200">{{ $r->model_name }}@if($r->is_simulated)<span class="ml-1 badge-slate">sim</span>@endif</td>
                         <td>
                             @php
-                                $classColor = [
-                                    'Slowloris Detected' => 'rose',
-                                    'Suspicious'         => 'amber',
-                                    'Normal'             => 'emerald',
-                                    'Inconclusive'       => 'slate',
-                                ][$r->classification] ?? 'slate';
+                                $classColor = $classificationColor($r->classification);
                             @endphp
-                            <span class="badge bg-{{ $classColor }}-500/15 text-{{ $classColor }}-300 border-{{ $classColor }}-500/30">{{ $r->classification }}</span>
+                            <span class="badge bg-{{ $classColor }}-500/15 text-{{ $classColor }}-300 border-{{ $classColor }}-500/30">{{ $classificationLabel($r->classification) }}</span>
                         </td>
                         <td class="font-mono text-cyan-300">{{ $r->confidence_score }}%</td>
                         <td class="text-slate-300 max-w-md">{{ $r->reason }}</td>
                         <td class="text-xs text-slate-400">
                             @foreach (array_slice((array)$r->supporting_indicators, 0, 3) as $ind)
-                                <span class="block">• {{ $ind }}</span>
+                                @if (is_array($ind))
+                                    <span class="block">
+                                        • {{ $ind['field'] ?? 'indicator' }}@if(isset($ind['value'])): {{ $ind['value'] }}@endif
+                                        @if(isset($ind['interpretation'])) - {{ $ind['interpretation'] }}@endif
+                                    </span>
+                                @else
+                                    <span class="block">• {{ $ind }}</span>
+                                @endif
                             @endforeach
                         </td>
                     </tr>

@@ -11,7 +11,7 @@
         @csrf
         <div class="md:col-span-2">
             <label class="label-field">Nama Eksperimen *</label>
-            <input name="name" type="text" required class="input-field" placeholder="Slowloris Lab Test Ubuntu Local">
+            <input name="name" type="text" required class="input-field" placeholder="Attack Profile Lab Test Ubuntu Local">
         </div>
         <div>
             <label class="label-field">Tanggal *</label>
@@ -22,8 +22,18 @@
             <select name="traffic_type" class="input-field" required>
                 <option value="unknown">Unknown</option>
                 <option value="normal">Normal</option>
-                <option value="slowloris_lab">Slowloris Lab</option>
+                <option value="slowloris_lab">Attack Lab</option>
                 <option value="mixed">Mixed</option>
+            </select>
+        </div>
+        <div>
+            <label class="label-field">Tool Profile *</label>
+            <select name="tool_profile" class="input-field" required>
+                @foreach ($toolProfiles as $profile)
+                    <option value="{{ $profile['key'] }}" @selected(old('tool_profile', 'slowloris') === $profile['key'])>
+                        {{ $profile['label'] }} @if($profile['owner']) - {{ $profile['owner'] }} @endif
+                    </option>
+                @endforeach
             </select>
         </div>
         <div>
@@ -36,16 +46,45 @@
                 <option value="slow-http">
                 <option value="portscan">
                 <option value="iperf-bandwidth">
+                <option value="loic">
+                <option value="hoic">
+                <option value="hping3">
+                <option value="torshammer">
+                <option value="xerxes">
                 <option value="manual">
             </datalist>
             <p class="text-[11px] text-slate-500 mt-1">Gunakan huruf kecil, angka, dash, atau underscore. Contoh: slow-http.</p>
+        </div>
+        <div>
+            <label class="label-field">Attack Pattern</label>
+            <input name="attack_pattern" type="text" class="input-field" list="attack-pattern-options"
+                   value="{{ old('attack_pattern') }}" placeholder="slow_http / http_flood / tcp_syn_flood">
+            <datalist id="attack-pattern-options">
+                <option value="slow_http">
+                <option value="http_flood">
+                <option value="tcp_flood">
+                <option value="tcp_syn_flood">
+                <option value="udp_flood">
+                <option value="icmp_flood">
+                <option value="mixed">
+            </datalist>
+            <p class="text-[11px] text-slate-500 mt-1">Metadata teknis, bukan identitas utama penelitian.</p>
+        </div>
+        <div>
+            <label class="label-field">Analysis Profile Key</label>
+            <input name="analysis_profile_key" type="text" class="input-field" value="{{ old('analysis_profile_key') }}" placeholder="otomatis mengikuti tool_profile">
+        </div>
+        <div>
+            <label class="label-field">Target Platform</label>
+            <input name="target_platform" type="text" class="input-field" value="{{ old('target_platform', 'vm_ubuntu_server') }}">
+            <p class="text-[11px] text-slate-500 mt-1">Testing saat ini memakai VM Ubuntu Server. ESP32/drone hanya ditulis jika datanya tersedia.</p>
         </div>
         <div>
             <label class="label-field">Ground Truth Label</label>
             <select name="ground_truth_label" class="input-field">
                 <option value="">— belum diketahui —</option>
                 <option value="normal">Normal</option>
-                <option value="slowloris_lab">Slowloris Lab</option>
+                <option value="slowloris_lab">Attack Lab</option>
                 <option value="mixed">Mixed</option>
                 <option value="unknown">Unknown</option>
             </select>

@@ -5,7 +5,11 @@
 
 @section('content')
 
-@php $features = $report->experiment?->extractedFeature; @endphp
+@php
+    $features = $report->experiment?->extractedFeature;
+    $scoreLabel = fn (?string $category) => \App\Support\AttackPresentation::scoreLabel($category);
+    $decisionLabel = fn (?string $decision) => \App\Support\AttackPresentation::decisionLabel($decision);
+@endphp
 
 <div class="card mb-4">
     <div class="card-header">
@@ -20,7 +24,7 @@
         <div><p class="text-xs text-slate-500">Eksperimen</p><p class="font-mono text-cyan-300">{{ $report->experiment?->experiment_code }}</p></div>
         <div>
             <p class="text-xs text-slate-500">Keputusan (gated)</p>
-            <p class="text-slate-100 font-semibold">{{ $report->final_decision }}</p>
+            <p class="text-slate-100 font-semibold">{{ $decisionLabel($report->final_decision) }}</p>
             @if (!empty($report->voting_summary['voting_decision']))
                 <p class="text-[11px] text-slate-500 mt-1">Voting AI: {{ $report->voting_summary['voting_decision'] }}</p>
             @endif
@@ -33,7 +37,7 @@
 <div class="rounded-lg p-4 bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs mb-4">
     <strong>Disclaimer:</strong>
     Klasifikasi pada laporan ini berasal dari evidence-gated scoring (Wireshark + Snort + pola koneksi).
-    Label <em>Serangan asli</em> hanya muncul ketika bukti gabungan terpenuhi.
+    Label <em>Attack Detected</em> hanya muncul ketika bukti gabungan terpenuhi.
     Eksperimen dijalankan pada VM lab lokal (subnet 192.168.56.0/24) dan tidak boleh digeneralisasi ke target publik.
 </div>
 
@@ -66,7 +70,7 @@
                     @endforeach
                     <div class="flex justify-between border-b border-slate-800 pb-1 col-span-2 text-amber-300">
                         <span class="text-slate-300">Final Attack Score</span>
-                        <span class="font-mono">{{ $features->final_attack_score }} ({{ $features->attack_category }})</span>
+                        <span class="font-mono">{{ $features->final_attack_score }} ({{ $scoreLabel($features->attack_category) }})</span>
                     </div>
                 </div>
             </div>

@@ -4,6 +4,7 @@ use App\Http\Controllers\AcquisitionController;
 use App\Http\Controllers\AiValidationController;
 use App\Http\Controllers\AnalysisController;
 use App\Http\Controllers\ApiSettingController;
+use App\Http\Controllers\ComparisonController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExperimentController;
 use App\Http\Controllers\LabController;
@@ -26,6 +27,8 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     // Eksperimen
+    Route::post('/experiments/vm-drafts', [ExperimentController::class, 'createVmDrafts'])
+        ->middleware('role:admin')->name('experiments.vm-drafts');
     Route::resource('experiments', ExperimentController::class);
 
     // Akuisisi
@@ -55,12 +58,16 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/visualization', [VisualizationController::class, 'index'])->name('visualization.index');
     Route::get('/visualization/{experiment}', [VisualizationController::class, 'index'])->name('visualization.show');
 
-    // AI Validation
+    // AI Analysis
     Route::get('/ai', [AiValidationController::class, 'index'])->name('ai.index');
     Route::get('/ai/{experiment}', [AiValidationController::class, 'show'])->name('ai.show');
     Route::post('/ai/{experiment}/run', [AiValidationController::class, 'run'])
         ->middleware('role:admin')->name('ai.run');
     Route::get('/ai/{experiment}/export', [AiValidationController::class, 'exportJson'])->name('ai.export');
+
+    // Comparison
+    Route::get('/comparison', [ComparisonController::class, 'index'])->name('comparison.index');
+    Route::get('/comparison/{experiment}', [ComparisonController::class, 'show'])->name('comparison.show');
 
     // Laboratorium & Metodologi
     Route::get('/lab', [LabController::class, 'index'])->name('lab.index');

@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('title', 'Pengaturan API')
-@section('subtitle', 'Tambah provider AI sendiri. Provider tanpa key tidak muncul di Validasi AI.')
+@section('subtitle', 'Tambah provider AI sendiri. Provider tanpa key tidak muncul di AI Analysis.')
 
 @section('content')
 
@@ -33,6 +33,17 @@
         </div>
 
         <div>
+            <label class="label-field">Tool Profile</label>
+            <select name="tool_profile" class="input-field">
+                <option value="">Umum untuk semua profile</option>
+                @foreach ($toolProfiles as $profile)
+                    <option value="{{ $profile['key'] }}" @selected(old('tool_profile') === $profile['key'])>{{ $profile['label'] }}</option>
+                @endforeach
+            </select>
+            <p class="mt-1 text-[11px] text-gray-500">Isi jika provider/model hanya dipakai untuk satu tool profile.</p>
+        </div>
+
+        <div>
             <label class="label-field">Model *</label>
             <input class="input-field" name="model" value="{{ old('model') }}" placeholder="llama-3.3-70b-versatile / gpt-4o-mini / gemini-1.5-flash">
             @error('model')<p class="mt-1 text-xs text-red-700">{{ $message }}</p>@enderror
@@ -49,14 +60,14 @@
 
         <div class="lg:col-span-2">
             <label class="label-field">API Key</label>
-            <input class="input-field" type="password" name="api_key" autocomplete="new-password" placeholder="Isi manual. Kosong = tidak muncul di Validasi AI.">
+            <input class="input-field" type="password" name="api_key" autocomplete="new-password" placeholder="Isi manual. Kosong = tidak muncul di AI Analysis.">
             @error('api_key')<p class="mt-1 text-xs text-red-700">{{ $message }}</p>@enderror
         </div>
 
         <label class="lg:col-span-2 flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-3">
             <span>
                 <span class="block text-sm font-medium text-gray-900">Gunakan live API</span>
-                <span class="block text-xs text-gray-500">Provider hanya muncul di Validasi AI jika live API aktif dan API key tersedia.</span>
+                <span class="block text-xs text-gray-500">Provider hanya muncul di AI Analysis jika live API aktif dan API key tersedia.</span>
             </span>
             <input type="checkbox" name="use_live_api" value="1" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" @checked(old('use_live_api', true))>
         </label>
@@ -79,10 +90,10 @@
                     <div class="flex items-start justify-between gap-3">
                         <div>
                             <p class="font-semibold text-gray-950">{{ $p['label'] }}</p>
-                            <p class="text-xs text-gray-500">{{ $p['key'] }} · {{ $p['driver'] }}</p>
+                            <p class="text-xs text-gray-500">{{ $p['key'] }} · {{ $p['driver'] }} @if($p['tool_profile']) · {{ strtoupper($p['tool_profile']) }} @endif</p>
                         </div>
                         @if ($p['can_run'])
-                            <span class="badge-emerald">Muncul di Validasi AI</span>
+                            <span class="badge-emerald">Muncul di AI Analysis</span>
                         @elseif ($p['has_key'])
                             <span class="badge-amber">Live API off</span>
                         @else
@@ -101,6 +112,16 @@
                             <option value="openai_compatible" @selected($p['driver'] === 'openai_compatible')>OpenAI-compatible</option>
                             <option value="gemini" @selected($p['driver'] === 'gemini')>Google Gemini</option>
                             <option value="ollama" @selected($p['driver'] === 'ollama')>Ollama lokal</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="label-field">Tool Profile</label>
+                        <select name="tool_profile" class="input-field">
+                            <option value="">Umum untuk semua profile</option>
+                            @foreach ($toolProfiles as $profile)
+                                <option value="{{ $profile['key'] }}" @selected(($p['tool_profile'] ?? null) === $profile['key'])>{{ $profile['label'] }}</option>
+                            @endforeach
                         </select>
                     </div>
 
@@ -146,7 +167,7 @@
             </div>
         @empty
             <div class="xl:col-span-2 rounded-lg border border-gray-200 bg-gray-50 p-5 text-sm text-gray-700">
-                Belum ada provider tersimpan. Tambahkan provider dan isi API key agar muncul di halaman Validasi AI.
+                Belum ada provider tersimpan. Tambahkan provider dan isi API key agar muncul di halaman AI Analysis.
             </div>
         @endforelse
     </div>

@@ -57,6 +57,11 @@ class ScoringService
         'normal-baseline',
     ];
 
+    public function __construct(private ?ToolProfileService $toolProfiles = null)
+    {
+        $this->toolProfiles ??= new ToolProfileService();
+    }
+
     public function selectAcquisition(Experiment $experiment): ?AcquisitionFile
     {
         return $experiment->acquisitionFiles()->latest()->first();
@@ -95,10 +100,13 @@ class ScoringService
         $halfOpen         = (float) ($acq->half_open_connections ?? 0);
 
         $parsed = is_array($acq?->parsed_summary) ? $acq->parsed_summary : [];
+        $protocolDistribution = is_array($acq?->protocol_distribution) ? $acq->protocol_distribution : [];
         $duration         = (float) ($parsed['duration'] ?? max(1, $experiment->capture_duration ?? 0));
         $throughput       = (float) ($parsed['throughput_kbps'] ?? 0);
         $longLived        = (float) ($parsed['long_lived_connections'] ?? 0);
         $connsToHttpPort  = (float) ($parsed['connections_to_http_port'] ?? 0);
+        $udpPackets       = (float) ($parsed['udp_packets'] ?? $protocolDistribution['UDP'] ?? $protocolDistribution['udp'] ?? 0);
+        $icmpPackets      = (float) ($parsed['icmp_packets'] ?? $protocolDistribution['ICMP'] ?? $protocolDistribution['icmp'] ?? 0);
 
         $totalAlerts      = (float) ($val->total_alerts ?? 0);
         $sev              = is_array($val?->parsed_summary)
@@ -115,6 +123,8 @@ class ScoringService
         return [
             'total_packets'             => $totalPackets,
             'tcp_packets'               => $tcpPackets,
+            'udp_packets'               => $udpPackets,
+            'icmp_packets'              => $icmpPackets,
             'http_packets'              => $httpPackets,
             'avg_packet_size'           => $avgPacketSize,
             'duration_seconds'          => $duration,
@@ -134,7 +144,7 @@ class ScoringService
         ];
     }
 
-    public function computeRadarScores(array $f): array
+    public function computeRadarScores(array $f, ?string $toolProfile = null): array
     {
         // Slow factor: 0..1, mendekati 1 ketika rata-rata durasi koneksi >= 30 detik.
         $slowFactor = $this->slowFactor((float) ($f['avg_connection_duration'] ?? 0));
@@ -200,6 +210,17 @@ class ScoringService
         // 6) Baseline deviation: directional. Hanya banyak koneksi + throughput RENDAH yang menghukum.
         $baselineScore = $this->directionalBaselineScore($f);
 
+        $totalPackets = max(1, (float) ($f['total_packets'] ?? 0));
+        $packetVolumeScore = $this->clamp(($totalPackets / 5000) * 100);
+        $connectionVolumeScore = $this->clamp(((float) ($f['total_connections'] ?? 0) / max(1, (float) ($f['baseline_avg_connections'] ?? self::BASELINE_DEFAULT_CONNECTIONS))) * 100);
+        $httpVolumeScore = max(
+            $this->clamp(((float) ($f['http_packets'] ?? 0) / 3000) * 100),
+            $this->clamp((((float) ($f['http_packets'] ?? 0)) / $totalPackets) * 100)
+        );
+        $throughputPressureScore = $this->clamp(((float) ($f['throughput_kbps'] ?? 0) / max(1, (float) ($f['baseline_throughput_kbps'] ?? self::BASELINE_DEFAULT_THROUGHPUT))) * 100);
+        $transportPackets = (float) ($f['tcp_packets'] ?? 0) + (float) ($f['udp_packets'] ?? 0) + (float) ($f['icmp_packets'] ?? 0);
+        $transportFloodScore = $this->clamp(($transportPackets / $totalPackets) * $packetVolumeScore);
+
         return [
             'connection_duration_score'           => round($connScore, 2),
             'header_anomaly_score'                => round($headerScore, 2),
@@ -207,26 +228,30 @@ class ScoringService
             'snort_alert_score'                   => round($snortScore, 2),
             'tcp_connection_score'                => round($tcpScore, 2),
             'baseline_deviation_score'            => round($baselineScore, 2),
+            'packet_volume_score'                 => round($packetVolumeScore, 2),
+            'connection_volume_score'             => round($connectionVolumeScore, 2),
+            'http_volume_score'                   => round($httpVolumeScore, 2),
+            'throughput_pressure_score'           => round($throughputPressureScore, 2),
+            'transport_flood_score'               => round($transportFloodScore, 2),
             'ai_confidence_score'                 => 0,
         ];
     }
 
-    public function computeFinalScore(array $radar): array
+    public function computeFinalScore(array $radar, ?string $toolProfile = null): array
     {
-        $score =
-              0.20 * ($radar['connection_duration_score'] ?? 0)
-            + 0.20 * ($radar['header_anomaly_score'] ?? 0)
-            + 0.15 * ($radar['low_bandwidth_high_connection_score'] ?? 0)
-            + 0.20 * ($radar['snort_alert_score'] ?? 0)
-            + 0.10 * ($radar['tcp_connection_score'] ?? 0)
-            + 0.10 * ($radar['baseline_deviation_score'] ?? 0)
-            + 0.05 * ($radar['ai_confidence_score'] ?? 0);
+        $toolProfile = $this->toolProfiles->normalize($toolProfile);
+        $weights = $this->toolProfiles->get($toolProfile)['score_weights'] ?? [];
+
+        $score = 0.0;
+        foreach ($weights as $metric => $weight) {
+            $score += (float) $weight * (float) ($radar[$metric] ?? 0);
+        }
 
         $score = round($score, 2);
 
         return [
             'final_attack_score' => $score,
-            'attack_category'    => $this->categorize($score),
+            'attack_category'    => $this->categorize($score, $toolProfile),
         ];
     }
 
@@ -245,37 +270,59 @@ class ScoringService
      *   gate_reasons: array
      * }
      */
-    public function evaluateExperiment(Experiment $experiment, array $features, array $radar): array
+    public function evaluateExperiment(Experiment $experiment, array $features, array $radar, ?string $toolProfile = null): array
     {
-        $final  = $this->computeFinalScore($radar);
+        $toolProfile = $this->toolProfiles->normalize($toolProfile ?? $experiment->tool_profile ?? null);
+        $final  = $this->computeFinalScore($radar, $toolProfile);
         $rawCat = $final['attack_category'];
         $score  = (float) $final['final_attack_score'];
 
         $context = [
+            'tool_profile'        => $toolProfile,
+            'attack_pattern'      => (string) ($experiment->attack_pattern ?? ''),
             'scenario_key'        => (string) ($experiment->scenario_key ?? ''),
             'ground_truth_label'  => (string) ($experiment->ground_truth_label ?? ''),
             'traffic_type'        => (string) ($experiment->traffic_type ?? ''),
             'dominant_alert_type' => (string) ($this->dominantAlertType($experiment) ?? ''),
         ];
 
-        $gates = $this->evaluateEvidenceGates($features, $radar, $context);
-        $finalCategory = $this->applyEvidenceGate($rawCat, $gates, $score);
+        $gates = $toolProfile === 'slowloris'
+            ? $this->evaluateEvidenceGates($features, $radar, $context)
+            : $this->evaluateProfileEvidenceGates($features, $radar, $context, $toolProfile);
+        $finalCategory = $this->applyEvidenceGate($rawCat, $gates, $score, $toolProfile);
 
         return [
             'features'            => $features,
             'radar'               => $radar,
+            'tool_profile'        => $toolProfile,
+            'attack_pattern'      => $experiment->attack_pattern ?? null,
+            'analysis_profile_key'=> $toolProfile,
             'final_attack_score'  => $score,
             'raw_attack_category' => $rawCat,
             'attack_category'     => $finalCategory,
-            'experiment_status'   => $this->categoryToExperimentStatus($finalCategory),
-            'final_decision'      => $this->categoryToFinalDecision($finalCategory),
+            'logic_classification'=> $finalCategory,
+            'logic_score'         => $score,
+            'experiment_status'   => $this->categoryToExperimentStatus($finalCategory, $toolProfile),
+            'final_decision'      => $this->categoryToFinalDecision($finalCategory, $toolProfile),
             'evidence_gates'      => $gates['flags'],
             'gate_reasons'        => $gates['reasons'],
         ];
     }
 
-    public function categorize(float $score): string
+    public function categorize(float $score, ?string $toolProfile = null): string
     {
+        $toolProfile = $this->toolProfiles->normalize($toolProfile);
+        if ($toolProfile !== 'slowloris') {
+            $label = $this->toolProfiles->get($toolProfile)['label'] ?? strtoupper($toolProfile);
+
+            return match (true) {
+                $score <= 30 => 'Normal',
+                $score <= 55 => 'Suspicious',
+                $score <= 75 => 'Possible ' . $label,
+                default      => 'Strong ' . $label . ' Indication',
+            };
+        }
+
         return match (true) {
             $score <= 30 => 'Normal',
             $score <= 55 => 'Suspicious',
@@ -284,8 +331,21 @@ class ScoringService
         };
     }
 
-    public function categoryToExperimentStatus(string $category): string
+    public function categoryToExperimentStatus(string $category, ?string $toolProfile = null): string
     {
+        $toolProfile = $this->toolProfiles->normalize($toolProfile);
+        if ($toolProfile !== 'slowloris') {
+            $label = $this->toolProfiles->get($toolProfile)['label'] ?? strtoupper($toolProfile);
+            return match ($category) {
+                'Normal' => 'normal',
+                'Suspicious',
+                'Possible ' . $label => 'suspicious',
+                'Strong ' . $label . ' Indication' => 'attack_detected',
+                'Inconclusive' => 'inconclusive',
+                default => 'inconclusive',
+            };
+        }
+
         return match ($category) {
             'Normal'                       => 'normal',
             'Suspicious',
@@ -296,8 +356,21 @@ class ScoringService
         };
     }
 
-    public function categoryToFinalDecision(string $category): string
+    public function categoryToFinalDecision(string $category, ?string $toolProfile = null): string
     {
+        $toolProfile = $this->toolProfiles->normalize($toolProfile);
+        if ($toolProfile !== 'slowloris') {
+            $label = $this->toolProfiles->get($toolProfile)['label'] ?? strtoupper($toolProfile);
+            return match ($category) {
+                'Normal' => 'Traffic normal',
+                'Suspicious' => 'Perlu validasi lanjutan',
+                'Possible ' . $label => 'Indikasi ' . $label . ', butuh validasi lanjutan',
+                'Strong ' . $label . ' Indication' => 'Serangan asli',
+                'Inconclusive' => 'Inconclusive',
+                default => 'Perlu validasi lanjutan',
+            };
+        }
+
         return match ($category) {
             'Normal'                       => 'Traffic normal',
             'Suspicious'                   => 'Perlu validasi lanjutan',
@@ -386,11 +459,103 @@ class ScoringService
         ];
     }
 
+    private function evaluateProfileEvidenceGates(array $f, array $radar, array $ctx, string $toolProfile): array
+    {
+        $profile = $this->toolProfiles->get($toolProfile);
+        $flags = [];
+        $reasons = [];
+        $totalPackets = max(1, (float) ($f['total_packets'] ?? 0));
+        $httpPackets = (float) ($f['http_packets'] ?? 0);
+        $udpPackets = (float) ($f['udp_packets'] ?? 0);
+        $icmpPackets = (float) ($f['icmp_packets'] ?? 0);
+        $tcpPackets = (float) ($f['tcp_packets'] ?? 0);
+        $scenario = strtolower(trim((string) ($ctx['scenario_key'] ?? '')));
+        $groundTruth = strtolower(trim((string) ($ctx['ground_truth_label'] ?? '')));
+        $dominantAlert = strtolower((string) ($ctx['dominant_alert_type'] ?? ''));
+        $attackPattern = strtolower(trim((string) ($ctx['attack_pattern'] ?? '')));
+
+        $flags['volume_signal_present'] = ((float) ($radar['packet_volume_score'] ?? 0)) >= 50
+            || ((float) ($radar['connection_volume_score'] ?? 0)) >= 50
+            || ((float) ($radar['throughput_pressure_score'] ?? 0)) >= 50;
+
+        $flags['snort_relevant'] = ((float) ($radar['snort_alert_score'] ?? 0)) >= 30
+            || str_contains($dominantAlert, 'dos')
+            || str_contains($dominantAlert, 'flood')
+            || str_contains($dominantAlert, strtolower((string) ($profile['label'] ?? $toolProfile)));
+
+        $flags['http_flood_signal'] = in_array($toolProfile, ['loic', 'hoic', 'xerxes'], true)
+            && ($httpPackets / $totalPackets >= 0.25 || ((float) ($radar['http_volume_score'] ?? 0)) >= 50);
+
+        $flags['transport_flood_signal'] = $toolProfile === 'hping3'
+            && (
+                ((float) ($radar['transport_flood_score'] ?? 0)) >= 45
+                || $udpPackets / $totalPackets >= 0.35
+                || $icmpPackets / $totalPackets >= 0.35
+                || ($tcpPackets / $totalPackets >= 0.70 && ((float) ($radar['packet_volume_score'] ?? 0)) >= 40)
+                || in_array($attackPattern, ['tcp_syn_flood', 'udp_flood', 'icmp_flood'], true)
+            );
+
+        $flags['slow_http_signal'] = $toolProfile === 'torshammer'
+            && (
+                ((float) ($radar['connection_duration_score'] ?? 0)) >= 60
+                || ((float) ($radar['low_bandwidth_high_connection_score'] ?? 0)) >= 60
+                || ((float) ($radar['header_anomaly_score'] ?? 0)) >= 30
+            );
+
+        $profileSignal = $flags['http_flood_signal'] || $flags['transport_flood_signal'] || $flags['slow_http_signal'];
+        $flags['profile_signal_present'] = $profileSignal;
+
+        if (!$flags['volume_signal_present']) {
+            $reasons[] = 'Volume traffic belum cukup kuat untuk profil ' . ($profile['label'] ?? $toolProfile) . '.';
+        }
+        if (!$flags['profile_signal_present']) {
+            $reasons[] = 'Indikator teknis tidak sesuai profil ' . ($profile['label'] ?? $toolProfile) . '.';
+        }
+
+        $falsePositiveGuards = $profile['false_positive_guards'] ?? [];
+        $isFalsePositiveScenario = in_array($scenario, $falsePositiveGuards, true)
+            || in_array($groundTruth, ['normal', 'http_burst', 'iperf', 'portscan'], true);
+        $strongSnort = ((float) ($radar['snort_alert_score'] ?? 0)) >= 60 && $flags['snort_relevant'];
+        $flags['scenario_blocks_attack'] = $isFalsePositiveScenario && !$strongSnort;
+        if ($flags['scenario_blocks_attack']) {
+            $reasons[] = 'Skenario "' . ($scenario ?: $groundTruth) . '" termasuk false-positive guard untuk profil ini.';
+        }
+
+        $flags['is_portscan'] = $scenario === 'portscan' || str_contains($dominantAlert, 'scan');
+        if ($flags['is_portscan']) {
+            $reasons[] = 'Pola portscan terdeteksi; tidak boleh dinaikkan menjadi detected.';
+        }
+
+        $flags['ai_alone_blocked'] = ($radar['ai_confidence_score'] ?? 0) > 0
+            && !$flags['volume_signal_present']
+            && !$flags['snort_relevant'];
+        if ($flags['ai_alone_blocked']) {
+            $reasons[] = 'Confidence AI tidak boleh menggantikan bukti akuisisi dan validasi.';
+        }
+
+        $flags['composite_signal_passed'] = $flags['volume_signal_present']
+            && $flags['profile_signal_present']
+            && ($flags['snort_relevant'] || ((float) ($radar['packet_volume_score'] ?? 0)) >= 70);
+        if (!$flags['composite_signal_passed']) {
+            $reasons[] = 'Butuh kombinasi volume, indikator profil, dan Snort/packet evidence kuat.';
+        }
+
+        return [
+            'flags' => $flags,
+            'reasons' => array_values(array_unique($reasons)),
+        ];
+    }
+
     /**
      * Setelah skor categorize(), turunkan kategori bila gate bukti tidak terpenuhi.
      */
-    private function applyEvidenceGate(string $rawCategory, array $gates, float $score): string
+    private function applyEvidenceGate(string $rawCategory, array $gates, float $score, ?string $toolProfile = null): string
     {
+        $toolProfile = $this->toolProfiles->normalize($toolProfile);
+        if ($toolProfile !== 'slowloris') {
+            return $this->applyProfileEvidenceGate($rawCategory, $gates, $score, $toolProfile);
+        }
+
         $flags = $gates['flags'];
 
         // Portscan: paksa Suspicious maks (atau Normal).
@@ -420,6 +585,28 @@ class ScoringService
         if ($rawCategory === 'Possible Slowloris') {
             // Tetap Possible Slowloris -> akan di-map ke "suspicious" di experiment_status.
             return 'Possible Slowloris';
+        }
+
+        return $rawCategory;
+    }
+
+    private function applyProfileEvidenceGate(string $rawCategory, array $gates, float $score, string $toolProfile): string
+    {
+        $flags = $gates['flags'];
+        $label = $this->toolProfiles->get($toolProfile)['label'] ?? strtoupper($toolProfile);
+        $possible = 'Possible ' . $label;
+        $strong = 'Strong ' . $label . ' Indication';
+
+        if (!empty($flags['is_portscan']) || !empty($flags['scenario_blocks_attack'])) {
+            return $score <= 30 ? 'Normal' : 'Suspicious';
+        }
+
+        if ($rawCategory === $strong) {
+            if (empty($flags['composite_signal_passed']) || !empty($flags['ai_alone_blocked'])) {
+                return $possible;
+            }
+
+            return $strong;
         }
 
         return $rawCategory;

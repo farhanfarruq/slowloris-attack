@@ -1,24 +1,31 @@
 @extends('layouts.app')
 
 @section('title', 'Visualisasi Eksperimen')
-@section('subtitle', 'Grafik interaktif untuk timeline, severity, protocol, koneksi aktif, heatmap, dan radar.')
+@section('subtitle', 'Grafik akuisisi, validasi, AI Analysis, dan comparison logic vs AI.')
 
 @section('content')
 
 @php
-    $scoreTone = fn (?string $category) => match ($category) {
-        'Normal' => 'score-tone-normal',
-        'Suspicious' => 'score-tone-suspicious',
-        'Possible Slowloris' => 'score-tone-possible',
-        'Strong Slowloris Indication' => 'score-tone-strong',
-        default => 'score-tone-neutral',
-    };
+    $scoreTone = fn (?string $category) => \App\Support\AttackPresentation::scoreTone($category);
+    $scoreLabel = fn (?string $category) => \App\Support\AttackPresentation::scoreLabel($category);
 @endphp
 
 <div class="card mb-4">
     <form method="GET" class="card-header gap-3 flex-wrap">
         <p class="card-title">Pilih Eksperimen</p>
         <div class="flex items-center gap-2">
+            <select name="tool_profile" class="input-field">
+                <option value="">Semua tool profile</option>
+                @foreach ($toolProfiles as $profile)
+                    <option value="{{ $profile['key'] }}" @selected(request('tool_profile')===$profile['key'])>{{ $profile['label'] }}</option>
+                @endforeach
+            </select>
+            <select name="source" class="input-field">
+                @foreach (['all' => 'Semua sumber', 'acquisition' => 'Akuisisi', 'validation' => 'Validasi', 'ai' => 'AI Analysis', 'comparison' => 'Comparison'] as $key => $label)
+                    <option value="{{ $key }}" @selected(request('source', 'all')===$key)>{{ $label }}</option>
+                @endforeach
+            </select>
+            <button class="btn-primary text-xs" type="submit">Filter</button>
             <select name="exp" class="input-field" onchange="window.location.href='{{ url('visualization') }}/' + this.value">
                 @foreach ($experiments as $e)
                     <option value="{{ $e->id }}" @selected($selected && $selected->id===$e->id)>{{ $e->experiment_code }} — {{ $e->name }}</option>
@@ -42,7 +49,7 @@
                 <div class="mt-4 score-result-card {{ $scoreTone($datasets['attack_category']) }}">
                     <p class="score-result-caption">Final Attack Score</p>
                     <p class="score-result-value">{{ $datasets['final_score'] }}</p>
-                    <p class="score-result-category">{{ $datasets['attack_category'] }}</p>
+                    <p class="score-result-category">{{ $scoreLabel($datasets['attack_category']) }}</p>
                 </div>
             @endif
         </div>
@@ -105,6 +112,26 @@
             @endif
         </div>
     </div>
+
+    <div class="card xl:col-span-2">
+        <div class="card-header"><p class="card-title">AI Analysis Confidence</p></div>
+        <div class="p-5"><canvas id="aiConfidenceChart" height="220"></canvas></div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><p class="card-title">AI Evidence Counts</p></div>
+        <div class="p-5"><canvas id="aiEvidenceChart" height="220"></canvas></div>
+    </div>
+
+    <div class="card xl:col-span-2">
+        <div class="card-header"><p class="card-title">AI Indicator Scores</p></div>
+        <div class="p-5"><canvas id="aiIndicatorChart" height="220"></canvas></div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><p class="card-title">Logic vs AI</p></div>
+        <div class="p-5"><canvas id="comparisonChart" height="220"></canvas></div>
+    </div>
 </div>
 
 <script>
@@ -114,6 +141,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const protocol = @json($datasets['protocol']);
     const timeline = @json($datasets['timeline']);
     const connections = @json($datasets['connections_over_time']);
+    const ai = @json($datasets['ai']);
+    const comparison = @json($datasets['comparison']);
 
     const baseGrid = '#1e293b';
     const baseColor = '#94a3b8';
@@ -208,6 +237,70 @@ document.addEventListener('DOMContentLoaded', function () {
             }]
         },
         options: chartDefaults()
+    });
+
+    const confidenceRows = ai.confidence_by_provider || [];
+    new Chart(document.getElementById('aiConfidenceChart'), {
+        type: 'bar',
+        data: {
+            labels: confidenceRows.length ? confidenceRows.map(r => r.label) : ['No AI result'],
+            datasets: [{
+                label: 'AI Confidence',
+                data: confidenceRows.length ? confidenceRows.map(r => r.confidence) : [0],
+                backgroundColor: '#f59e0b',
+            }]
+        },
+        options: chartDefaults({ scales: { x: { grid: { color: baseGrid }, ticks: { color: baseColor } }, y: { grid: { color: baseGrid }, ticks: { color: baseColor }, min: 0, max: 100 } } })
+    });
+
+    const evidenceRows = ai.evidence_counts || [];
+    const evidenceTotals = evidenceRows.reduce((acc, row) => {
+        acc.present += Number(row.present || 0);
+        acc.missing += Number(row.missing || 0);
+        acc.blocking += Number(row.blocking || 0);
+        return acc;
+    }, {present: 0, missing: 0, blocking: 0});
+    new Chart(document.getElementById('aiEvidenceChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Present', 'Missing', 'Blocking'],
+            datasets: [{
+                data: [evidenceTotals.present, evidenceTotals.missing, evidenceTotals.blocking],
+                backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
+            }]
+        },
+        options: { plugins: { legend: { labels: { color: baseColor } } } }
+    });
+
+    const indicatorRows = ai.indicator_scores || [];
+    new Chart(document.getElementById('aiIndicatorChart'), {
+        type: 'bar',
+        data: {
+            labels: indicatorRows.length ? indicatorRows.map(r => r.label || 'indicator') : ['No indicator'],
+            datasets: [{
+                label: 'AI Indicator Weight',
+                data: indicatorRows.length ? indicatorRows.map(r => Number(r.score || 0)) : [0],
+                backgroundColor: '#8b5cf6',
+            }]
+        },
+        options: chartDefaults({ indexAxis: 'y', scales: { x: { grid: { color: baseGrid }, ticks: { color: baseColor }, min: 0, max: 100 }, y: { grid: { color: baseGrid }, ticks: { color: baseColor } } } })
+    });
+
+    const logicVsAi = comparison.logic_vs_ai || [
+        {label: 'Logic Score', value: 0},
+        {label: 'AI Confidence', value: 0},
+    ];
+    new Chart(document.getElementById('comparisonChart'), {
+        type: 'bar',
+        data: {
+            labels: logicVsAi.map(r => r.label),
+            datasets: [{
+                label: 'Comparison',
+                data: logicVsAi.map(r => Number(r.value || 0)),
+                backgroundColor: ['#22d3ee', '#f59e0b'],
+            }]
+        },
+        options: chartDefaults({ scales: { x: { grid: { color: baseGrid }, ticks: { color: baseColor } }, y: { grid: { color: baseGrid }, ticks: { color: baseColor }, min: 0, max: 100 } } })
     });
 });
 </script>

@@ -19,11 +19,11 @@
                                 $color = match (true) {
                                     $r->final_decision === 'Serangan asli' => 'rose',
                                     $r->final_decision === 'Traffic normal' => 'emerald',
-                                    str_starts_with((string) $r->final_decision, 'Indikasi Slowloris') => 'amber',
+                                    str_starts_with((string) $r->final_decision, 'Indikasi ') => 'amber',
                                     default => 'amber',
                                 };
                             @endphp
-                            <span class="badge bg-{{ $color }}-500/15 text-{{ $color }}-300 border-{{ $color }}-500/30">{{ $r->final_decision }}</span>
+                            <span class="badge bg-{{ $color }}-500/15 text-{{ $color }}-300 border-{{ $color }}-500/30">{{ \App\Support\AttackPresentation::decisionLabel($r->final_decision) }}</span>
                         </td>
                         <td class="font-mono">{{ $r->voting_average_confidence }}%</td>
                         <td class="text-slate-400">{{ $r->created_at->format('d M Y') }}</td>

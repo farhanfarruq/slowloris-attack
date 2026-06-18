@@ -26,6 +26,10 @@ class Experiment extends Model
         'status',
         'experiment_status',
         'ground_truth_label',
+        'tool_profile',
+        'attack_pattern',
+        'analysis_profile_key',
+        'target_platform',
         'user_id',
     ];
 

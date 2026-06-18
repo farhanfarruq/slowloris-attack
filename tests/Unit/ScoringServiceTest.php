@@ -225,6 +225,57 @@ class ScoringServiceTest extends TestCase
             'TCP-dominant tanpa long-lived tidak boleh saturasi tcp_score.');
     }
 
+    public function test_loic_http_flood_profile_can_reach_attack_detected_with_matching_evidence(): void
+    {
+        $experiment = $this->fakeExperiment(scenarioKey: 'http-flood-lab', groundTruth: 'mixed');
+        $experiment->forceFill([
+            'tool_profile' => 'loic',
+            'attack_pattern' => 'http_flood',
+        ]);
+
+        $features = $this->baseFeatures([
+            'total_packets' => 12000,
+            'tcp_packets' => 10000,
+            'http_packets' => 9000,
+            'total_connections' => 900,
+            'throughput_kbps' => 2500,
+            'high_severity_alerts' => 20,
+            'medium_severity_alerts' => 10,
+            'total_alerts' => 30,
+        ]);
+
+        $radar = $this->scoring->computeRadarScores($features, 'loic');
+        $eval = $this->scoring->evaluateExperiment($experiment, $features, $radar, 'loic');
+
+        $this->assertSame('attack_detected', $eval['experiment_status']);
+        $this->assertSame('Strong LOIC Indication', $eval['attack_category']);
+    }
+
+    public function test_hping3_profile_blocks_portscan_false_positive(): void
+    {
+        $experiment = $this->fakeExperiment(scenarioKey: 'portscan', groundTruth: 'portscan');
+        $experiment->forceFill([
+            'tool_profile' => 'hping3',
+            'attack_pattern' => 'tcp_syn_flood',
+        ]);
+
+        $features = $this->baseFeatures([
+            'total_packets' => 20000,
+            'tcp_packets' => 19000,
+            'total_connections' => 1200,
+            'throughput_kbps' => 3000,
+            'high_severity_alerts' => 5,
+            'medium_severity_alerts' => 40,
+            'total_alerts' => 45,
+        ]);
+
+        $radar = $this->scoring->computeRadarScores($features, 'hping3');
+        $eval = $this->scoring->evaluateExperiment($experiment, $features, $radar, 'hping3');
+
+        $this->assertNotSame('attack_detected', $eval['experiment_status']);
+        $this->assertSame('Suspicious', $eval['attack_category']);
+    }
+
     private function fakeExperiment(string $scenarioKey, string $groundTruth): Experiment
     {
         $experiment = new Experiment();

@@ -12,6 +12,7 @@ class AiProviderSetting extends Model
     protected $fillable = [
         'provider_key',
         'provider_label',
+        'tool_profile',
         'driver',
         'api_key',
         'api_url',

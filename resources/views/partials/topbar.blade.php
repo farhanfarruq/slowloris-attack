@@ -2,11 +2,11 @@
     <div class="px-6 lg:px-8 py-4 flex items-center justify-between gap-4">
         <div class="flex items-center gap-3 min-w-0">
             <div class="brand-logo-frame brand-logo-frame--topbar lg:hidden">
-                <img src="{{ asset('cyber-criminal.png') }}" alt="Slowloris Lab" class="brand-logo-image">
+        <img src="{{ asset('cyber-criminal.png') }}" alt="Network Attack Analysis Lab" class="brand-logo-image">
             </div>
             <div class="min-w-0">
-                <h1 class="text-lg lg:text-xl font-semibold text-gray-900 truncate">@yield('title', 'Dashboard Slowloris')</h1>
-                <p class="text-xs text-gray-500 mt-0.5 line-clamp-2">@yield('subtitle', 'Monitoring traffic lab lokal dan validasi pola Slow HTTP.')</p>
+            <h1 class="text-lg lg:text-xl font-semibold text-gray-900 truncate">@yield('title', 'Dashboard Attack Analysis')</h1>
+            <p class="text-xs text-gray-500 mt-0.5 line-clamp-2">@yield('subtitle', 'Monitoring traffic lab lokal dan validasi pola attack profile.')</p>
             </div>
         </div>
 

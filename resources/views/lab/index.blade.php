@@ -35,7 +35,7 @@
                 ['Packet Capture (Wireshark/dumpcap)', 'sky'],
                 ['Snort Validation (IDS/IPS)', 'amber'],
                 ['Feature Extraction', 'fuchsia'],
-                ['AI Validation (Multi-Model)', 'rose'],
+                ['AI Analysis (Multi-Model)', 'rose'],
                 ['Dashboard Result', 'violet'],
             ] as $i => $step)
                 <div class="px-3 py-2 rounded-lg bg-{{ $step[1] }}-500/15 border border-{{ $step[1] }}-500/30 text-{{ $step[1] }}-200">
@@ -92,7 +92,18 @@
     <div class="card-header"><p class="card-title">Catatan Etis & Keamanan</p></div>
     <div class="p-5 text-sm text-slate-300 space-y-2">
         <p>Website ini <strong>tidak menyediakan tombol serangan langsung</strong> ke target publik. Semua aksi terbatas pada upload data eksperimen yang sudah dilakukan di lab terisolasi.</p>
-        <p>Pengujian Slowloris/Slow HTTP harus dilakukan pada infrastruktur yang Anda miliki atau dengan izin tertulis. Penggunaan untuk menyerang sistem milik orang lain melanggar hukum dan etika penggunaan sistem.</p>
+        <p>Pengujian traffic attack profile harus dilakukan pada infrastruktur yang Anda miliki atau dengan izin tertulis. Penggunaan untuk menyerang sistem milik orang lain melanggar hukum dan etika penggunaan sistem.</p>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header">
+        <p class="card-title">Workflow Draft Eksperimen VM</p>
+    </div>
+    <div class="p-5 text-sm text-slate-300 space-y-2">
+        <p>Draft VM membuat satu eksperimen kosong untuk setiap tool profile: Slowloris, LOIC, HOIC, Hping3, Torshammer, dan Xerxes.</p>
+        <p>Draft tidak berisi command serangan, payload, automation, hasil sintetis AI, PCAP, atau log Snort. Isi IP target, IP sumber, interface, dan durasi capture setelah lab VM siap, lalu upload data akuisisi dan validasi dari eksperimen nyata.</p>
+        <p>Target default disimpan sebagai <code>vm_ubuntu_server</code> agar laporan jelas bahwa data saat ini berasal dari VM, bukan dataset generate AI.</p>
     </div>
 </div>
 

@@ -77,7 +77,7 @@
             <table class="table-stripe">
                 <thead>
                     <tr><th>File</th><th>Pasangan</th><th>Eksperimen</th><th>Mode</th><th>Total Alert</th><th>Severity</th>
-                        <th>Slow HTTP?</th><th>Top Src</th><th>Top Port</th><th></th></tr>
+                        <th>Pattern Match?</th><th>Top Src</th><th>Top Port</th><th></th></tr>
                 </thead>
                 <tbody>
                     @forelse ($files as $f)
@@ -131,6 +131,7 @@
         if (!experiment || !acquisition) return;
 
         const options = Array.from(acquisition.options);
+
         const syncAcquisitionOptions = function () {
             const selectedExperiment = experiment.value;
             let firstVisible = null;
@@ -138,12 +139,19 @@
             options.forEach(function (option) {
                 const visible = option.dataset.experiment === selectedExperiment;
                 option.hidden = !visible;
-                option.disabled = !visible;
+                // Jangan disable — option disabled tidak terkirim ke server saat form submit
+                option.disabled = false;
                 if (visible && !firstVisible) firstVisible = option;
             });
 
-            if (acquisition.selectedOptions.length && acquisition.selectedOptions[0].disabled && firstVisible) {
+            // Selalu paksa pilih opsi pertama yang terlihat untuk eksperimen ini
+            const currentSelected = acquisition.selectedOptions[0];
+            const currentIsHidden = currentSelected ? currentSelected.hidden : true;
+            if (firstVisible && currentIsHidden) {
                 acquisition.value = firstVisible.value;
+            } else if (!firstVisible) {
+                // Tidak ada akuisisi untuk eksperimen ini
+                acquisition.value = '';
             }
         };
 

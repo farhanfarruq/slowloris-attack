@@ -35,7 +35,7 @@ Artisan::command('ai:purge-simulated {--force : Run without confirmation}', func
 
     $this->info("Hasil AI simulasi/demo dihapus: {$deleted}");
     return self::SUCCESS;
-})->purpose('Remove simulated/demo AI validation results');
+})->purpose('Remove simulated/demo AI Analysis results');
 
 Artisan::command('ai:purge-failed {--force : Run without confirmation}', function () {
     if (!$this->option('force') && !$this->confirm('Hapus hasil AI gagal/Inconclusive 0% dari error provider?')) {
@@ -51,7 +51,7 @@ Artisan::command('ai:purge-failed {--force : Run without confirmation}', functio
 
     $this->info("Hasil AI gagal dihapus: {$deleted}");
     return self::SUCCESS;
-})->purpose('Remove failed live AI validation rows');
+})->purpose('Remove failed live AI Analysis rows');
 
 Artisan::command('lab:reset-research-data {--force : Run without confirmation}', function () {
     if (!$this->option('force') && !$this->confirm('Hapus semua data riset: experiment, akuisisi, validasi, alert, fitur, AI, laporan, dan file upload? Akun dan API key tetap disimpan.')) {

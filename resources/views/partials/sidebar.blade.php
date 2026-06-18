@@ -5,7 +5,8 @@
         ['route' => 'validation.index',     'label' => 'Validasi Data',      'icon' => 'shield'],
         ['route' => 'analysis.index',       'label' => 'Analisis',           'icon' => 'flask'],
         ['route' => 'visualization.index',  'label' => 'Grafik',             'icon' => 'chart'],
-        ['route' => 'ai.index',             'label' => 'AI Check',           'icon' => 'cpu'],
+        ['route' => 'ai.index',             'label' => 'AI Analysis',        'icon' => 'cpu'],
+        ['route' => 'comparison.index',     'label' => 'Comparison',         'icon' => 'chart'],
         ['route' => 'experiments.index',    'label' => 'Dataset',            'icon' => 'database'],
         ['route' => 'evaluation.index',     'label' => 'Evaluasi',           'icon' => 'check'],
         ['route' => 'reports.index',        'label' => 'Laporan',            'icon' => 'file'],
@@ -18,10 +19,10 @@
     <div class="px-6 pt-6 pb-4 border-b border-gray-200">
         <div class="flex items-center gap-3">
             <div class="brand-logo-frame brand-logo-frame--sidebar">
-                <img src="{{ asset('cyber-criminal.png') }}" alt="Slowloris Lab" class="brand-logo-image">
+        <img src="{{ asset('cyber-criminal.png') }}" alt="Network Attack Analysis Lab" class="brand-logo-image">
             </div>
             <div>
-                <p class="text-sm font-semibold text-gray-900 leading-tight">Slowloris Lab</p>
+            <p class="text-sm font-semibold text-gray-900 leading-tight">Attack Analysis Lab</p>
                 <p class="text-[11px] text-gray-500 uppercase tracking-wider">Personal Dashboard</p>
             </div>
         </div>

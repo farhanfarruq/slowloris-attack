@@ -9,13 +9,15 @@ use League\Csv\Reader;
  * Parser sederhana untuk file hasil akuisisi dari Wireshark/dumpcap.
  *
  * - .csv  : ringkasan packet dengan kolom umum (No., Time, Source, Destination, Protocol, Length, Info)
- * - .json : ekspor JSON atau ringkasan custom
- * - .pcap / .pcapng : memakai helper CLI Wireshark jika tersedia; kalau tidak, fallback ke metadata file.
+ * - .json : ringkasan custom; raw JSON packet export besar ditolak agar tidak menghabiskan RAM
+ * - .pcap / .pcapng : memakai tshark secara streaming jika tersedia; kalau tidak, fallback ke metadata file
  *
  * Tujuan: menghasilkan ringkasan numerik yang aman, bukan parsing forensik.
  */
 class AcquisitionParser
 {
+    private const MAX_JSON_SUMMARY_BYTES = 10 * 1024 * 1024;
+
     public function parse(string $absolutePath, string $extension): array
     {
         $extension = strtolower(pathinfo($extension, PATHINFO_EXTENSION) ?: $extension);
@@ -33,34 +35,60 @@ class AcquisitionParser
         try {
             $csv = Reader::createFromPath($path, 'r');
             $csv->setHeaderOffset(0);
-            $rows = iterator_to_array($csv->getRecords());
+            $records = $csv->getRecords();
+            $columns = $csv->getHeader();
         } catch (\Throwable $e) {
             Log::warning('CSV parse failed: ' . $e->getMessage());
             return $this->emptySummary('CSV tidak dapat dibaca');
         }
 
-        $total = count($rows);
+        $total = 0;
         $sources = [];
         $destinations = [];
         $protocols = [];
-        $lengths = [];
+        $connections = [];
+        $lengthSum = 0;
+        $lengthCount = 0;
         $tcp = 0;
         $http = 0;
 
-        foreach ($rows as $row) {
-            $row = array_change_key_case($row, CASE_LOWER);
-            $src = $row['source'] ?? $row['src'] ?? null;
-            $dst = $row['destination'] ?? $row['dst'] ?? null;
-            $proto = strtoupper($row['protocol'] ?? '');
-            $len = (int) ($row['length'] ?? 0);
+        try {
+            foreach ($records as $row) {
+                $row = array_change_key_case((array) $row, CASE_LOWER);
+                $src = $row['source'] ?? $row['src'] ?? null;
+                $dst = $row['destination'] ?? $row['dst'] ?? null;
+                $proto = strtoupper((string) ($row['protocol'] ?? ''));
+                $len = (int) ($row['length'] ?? 0);
 
-            if ($src) $sources[$src] = ($sources[$src] ?? 0) + 1;
-            if ($dst) $destinations[$dst] = ($destinations[$dst] ?? 0) + 1;
-            if ($proto) $protocols[$proto] = ($protocols[$proto] ?? 0) + 1;
-            if ($len > 0) $lengths[] = $len;
+                $total++;
 
-            if (str_contains($proto, 'TCP')) $tcp++;
-            if (str_contains($proto, 'HTTP')) $http++;
+                if ($src) {
+                    $sources[$src] = ($sources[$src] ?? 0) + 1;
+                }
+                if ($dst) {
+                    $destinations[$dst] = ($destinations[$dst] ?? 0) + 1;
+                }
+                if ($src && $dst) {
+                    $connections[$src . '>' . $dst] = true;
+                }
+                if ($proto) {
+                    $protocols[$proto] = ($protocols[$proto] ?? 0) + 1;
+                }
+                if ($len > 0) {
+                    $lengthSum += $len;
+                    $lengthCount++;
+                }
+
+                if (str_contains($proto, 'TCP')) {
+                    $tcp++;
+                }
+                if (str_contains($proto, 'HTTP')) {
+                    $http++;
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('CSV stream parse failed: ' . $e->getMessage());
+            return $this->emptySummary('CSV tidak dapat dibaca');
         }
 
         arsort($sources);
@@ -71,24 +99,32 @@ class AcquisitionParser
             'total_packets'        => $total,
             'tcp_packets'          => $tcp,
             'http_packets'         => $http,
-            'avg_packet_size'      => $lengths ? array_sum($lengths) / count($lengths) : null,
+            'avg_packet_size'      => $lengthCount ? round($lengthSum / $lengthCount, 2) : null,
             'top_source_ips'       => array_slice($sources, 0, 10, true),
             'top_destination_ips'  => array_slice($destinations, 0, 10, true),
             'protocol_distribution'=> $protocols,
-            'total_connections'    => $this->estimateConnections($rows),
+            'total_connections'    => $connections ? count($connections) : null,
             'avg_connection_duration' => null,
             'half_open_connections'=> null,
             'parsed_summary'       => [
-                'parser'  => 'csv',
-                'columns' => array_keys((array) ($rows[0] ?? [])),
+                'parser'  => 'csv-stream',
+                'columns' => $columns,
             ],
         ];
     }
 
     private function parseJson(string $path): array
     {
+        $size = filesize($path) ?: 0;
+
+        if ($size > self::MAX_JSON_SUMMARY_BYTES) {
+            return $this->emptySummary(
+                'JSON terlalu besar untuk diparse langsung. Upload ringkasan JSON, bukan raw packet export.'
+            );
+        }
+
         $contents = file_get_contents($path);
-        $data = json_decode($contents, true);
+        $data = json_decode((string) $contents, true);
 
         if (!is_array($data)) {
             return $this->emptySummary('JSON tidak valid');
@@ -143,159 +179,37 @@ class AcquisitionParser
 
     private function parsePcap(string $path): array
     {
-        // Coba gunakan helper CLI Wireshark jika tersedia, jika tidak fallback ke estimasi ukuran.
-        $tshark = trim((string) @shell_exec('command -v tshark 2>/dev/null'));
+        $size = filesize($path) ?: 0;
+        $maxAutoParseBytes = ((int) config('upload.pcap_auto_parse_max_mb', 100)) * 1024 * 1024;
+
+        if ($maxAutoParseBytes > 0 && $size > $maxAutoParseBytes) {
+            return [
+                'total_packets'        => null,
+                'tcp_packets'          => null,
+                'http_packets'         => null,
+                'avg_packet_size'      => null,
+                'top_source_ips'       => [],
+                'top_destination_ips'  => [],
+                'protocol_distribution'=> [],
+                'total_connections'    => null,
+                'avg_connection_duration' => null,
+                'half_open_connections'=> null,
+                'parsed_summary'       => [
+                    'parser' => 'pcap-large-skip',
+                    'note'   => 'PCAP/PCAPNG besar disimpan tanpa auto parse agar tidak menghabiskan RAM. Upload ringkasan CSV/JSON untuk analisis.',
+                    'size_bytes' => $size,
+                    'auto_parse_limit_bytes' => $maxAutoParseBytes,
+                ],
+            ];
+        }
+
+        $tshark = $this->findExecutable('tshark');
 
         if ($tshark) {
-            $fieldsCmd = escapeshellcmd($tshark)
-                . ' -r ' . escapeshellarg($path)
-                . ' -T fields'
-                . ' -E separator=' . escapeshellarg("\t")
-                . ' -E occurrence=f'
-                . ' -e frame.len'
-                . ' -e frame.time_epoch'
-                . ' -e frame.protocols'
-                . ' -e ip.src'
-                . ' -e ip.dst'
-                . ' -e tcp.stream'
-                . ' -e tcp.srcport'
-                . ' -e tcp.dstport'
-                . ' -e tcp.flags.fin'
-                . ' -e tcp.flags.reset'
-                . ' 2>/dev/null';
+            $summary = $this->parsePcapWithTshark($tshark, $path);
 
-            $fieldsOutput = @shell_exec($fieldsCmd);
-
-            if ($fieldsOutput) {
-                $total = 0;
-                $tcp = 0;
-                $http = 0;
-                $lengths = [];
-                $sources = [];
-                $destinations = [];
-                $protocols = [];
-                $streams = [];
-
-                foreach (preg_split('/\R/', trim($fieldsOutput)) as $line) {
-                    if ($line === '') {
-                        continue;
-                    }
-
-                    [$len, $timeEpoch, $protoStack, $src, $dst, $stream, $srcPort, $dstPort, $tcpFin, $tcpReset] =
-                        array_pad(explode("\t", $line), 10, '');
-
-                    $total++;
-                    $length = (int) $len;
-                    if ($length > 0) {
-                        $lengths[] = $length;
-                    }
-
-                    $protoStack = strtolower($protoStack);
-                    if (str_contains($protoStack, 'tcp')) {
-                        $tcp++;
-                        $protocols['TCP'] = ($protocols['TCP'] ?? 0) + 1;
-                    }
-
-                    if (str_contains($protoStack, 'http') || $srcPort === '80' || $dstPort === '80') {
-                        $http++;
-                        $protocols['HTTP'] = ($protocols['HTTP'] ?? 0) + 1;
-                    }
-
-                    if ($src !== '') {
-                        $sources[$src] = ($sources[$src] ?? 0) + 1;
-                    }
-                    if ($dst !== '') {
-                        $destinations[$dst] = ($destinations[$dst] ?? 0) + 1;
-                    }
-                    if ($stream !== '') {
-                        if (!isset($streams[$stream])) {
-                            $streams[$stream] = [
-                                'first' => null,
-                                'last' => null,
-                                'http_port' => false,
-                                'closed' => false,
-                            ];
-                        }
-
-                        $timestamp = is_numeric($timeEpoch) ? (float) $timeEpoch : null;
-                        if ($timestamp !== null) {
-                            $streams[$stream]['first'] = $streams[$stream]['first'] === null
-                                ? $timestamp
-                                : min($streams[$stream]['first'], $timestamp);
-                            $streams[$stream]['last'] = $streams[$stream]['last'] === null
-                                ? $timestamp
-                                : max($streams[$stream]['last'], $timestamp);
-                        }
-
-                        if ($srcPort === '80' || $dstPort === '80') {
-                            $streams[$stream]['http_port'] = true;
-                        }
-
-                        if ($tcpFin === '1' || $tcpReset === '1') {
-                            $streams[$stream]['closed'] = true;
-                        }
-                    }
-                }
-
-                arsort($sources);
-                arsort($destinations);
-                arsort($protocols);
-
-                $streamDurations = [];
-                $longLivedConnections = 0;
-                $connectionsToHttpPort = 0;
-                $openHttpConnections = 0;
-
-                foreach ($streams as $stream) {
-                    if (!empty($stream['http_port'])) {
-                        $connectionsToHttpPort++;
-                    }
-
-                    if ($stream['first'] !== null && $stream['last'] !== null) {
-                        $duration = max(0.0, (float) $stream['last'] - (float) $stream['first']);
-                        $streamDurations[] = $duration;
-
-                        if ($duration >= 60.0) {
-                            $longLivedConnections++;
-                        }
-                    }
-
-                    if (!empty($stream['http_port']) && empty($stream['closed'])) {
-                        $openHttpConnections++;
-                    }
-                }
-
-                $durationSeconds = $streamDurations
-                    ? max($streamDurations)
-                    : null;
-                $avgConnectionDuration = $streamDurations
-                    ? round(array_sum($streamDurations) / count($streamDurations), 2)
-                    : null;
-                $throughputKbps = ($durationSeconds && $durationSeconds > 0 && $lengths)
-                    ? round((array_sum($lengths) * 8) / 1000 / $durationSeconds, 2)
-                    : null;
-
-                return [
-                    'total_packets'        => $total,
-                    'tcp_packets'          => $tcp,
-                    'http_packets'         => $http,
-                    'avg_packet_size'      => $lengths ? round(array_sum($lengths) / count($lengths), 2) : null,
-                    'top_source_ips'       => array_slice($sources, 0, 10, true),
-                    'top_destination_ips'  => array_slice($destinations, 0, 10, true),
-                    'protocol_distribution'=> $protocols,
-                    'total_connections'    => count($streams) ?: null,
-                    'avg_connection_duration' => $avgConnectionDuration,
-                    'half_open_connections'=> $openHttpConnections ?: null,
-                    'parsed_summary'       => [
-                        'parser' => 'tshark-fields',
-                        'note'   => 'HTTP dihitung dari decoded HTTP atau TCP port 80.',
-                        'duration' => $durationSeconds,
-                        'throughput_kbps' => $throughputKbps,
-                        'long_lived_connections' => $longLivedConnections,
-                        'connections_to_http_port' => $connectionsToHttpPort,
-                        'open_http_connections' => $openHttpConnections,
-                    ],
-                ];
+            if ($summary !== null) {
+                return $summary;
             }
         }
 
@@ -312,24 +226,202 @@ class AcquisitionParser
             'half_open_connections'=> null,
             'parsed_summary'       => [
                 'parser' => 'fallback',
-                'note'   => 'Helper parser PCAP tidak tersedia. Upload juga ringkasan JSON/CSV agar parsing lengkap.',
+                'note'   => 'Helper parser PCAP tidak tersedia atau gagal. Upload juga ringkasan JSON/CSV agar parsing lengkap.',
                 'size_bytes' => filesize($path) ?: null,
             ],
         ];
     }
 
-    private function estimateConnections(array $rows): ?int
+    private function parsePcapWithTshark(string $tshark, string $path): ?array
     {
-        $pairs = [];
-        foreach ($rows as $row) {
-            $row = array_change_key_case($row, CASE_LOWER);
-            $src = $row['source'] ?? null;
-            $dst = $row['destination'] ?? null;
-            if ($src && $dst) {
-                $pairs[$src . '>' . $dst] = true;
+        $command = [
+            $tshark,
+            '-r', $path,
+            '-T', 'fields',
+            '-E', "separator=\t",
+            '-E', 'occurrence=f',
+            '-e', 'frame.len',
+            '-e', 'frame.time_epoch',
+            '-e', 'frame.protocols',
+            '-e', 'ip.src',
+            '-e', 'ip.dst',
+            '-e', 'tcp.stream',
+            '-e', 'tcp.srcport',
+            '-e', 'tcp.dstport',
+            '-e', 'tcp.flags.fin',
+            '-e', 'tcp.flags.reset',
+        ];
+
+        $process = @proc_open($command, [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['file', '/dev/null', 'w'],
+        ], $pipes);
+
+        if (!is_resource($process)) {
+            return null;
+        }
+
+        fclose($pipes[0]);
+
+        $total = 0;
+        $tcp = 0;
+        $http = 0;
+        $lengthSum = 0;
+        $lengthCount = 0;
+        $sources = [];
+        $destinations = [];
+        $protocols = [];
+        $streams = [];
+
+        try {
+            while (($line = fgets($pipes[1])) !== false) {
+                $line = rtrim($line, "\r\n");
+
+                if ($line === '') {
+                    continue;
+                }
+
+                [$len, $timeEpoch, $protoStack, $src, $dst, $stream, $srcPort, $dstPort, $tcpFin, $tcpReset] =
+                    array_pad(explode("\t", $line), 10, '');
+
+                $total++;
+                $length = (int) $len;
+                if ($length > 0) {
+                    $lengthSum += $length;
+                    $lengthCount++;
+                }
+
+                $protoStack = strtolower($protoStack);
+                if (str_contains($protoStack, 'tcp')) {
+                    $tcp++;
+                    $protocols['TCP'] = ($protocols['TCP'] ?? 0) + 1;
+                }
+
+                if (str_contains($protoStack, 'http') || $srcPort === '80' || $dstPort === '80') {
+                    $http++;
+                    $protocols['HTTP'] = ($protocols['HTTP'] ?? 0) + 1;
+                }
+
+                if ($src !== '') {
+                    $sources[$src] = ($sources[$src] ?? 0) + 1;
+                }
+                if ($dst !== '') {
+                    $destinations[$dst] = ($destinations[$dst] ?? 0) + 1;
+                }
+                if ($stream !== '') {
+                    if (!isset($streams[$stream])) {
+                        $streams[$stream] = [
+                            'first' => null,
+                            'last' => null,
+                            'http_port' => false,
+                            'closed' => false,
+                        ];
+                    }
+
+                    $timestamp = is_numeric($timeEpoch) ? (float) $timeEpoch : null;
+                    if ($timestamp !== null) {
+                        $streams[$stream]['first'] = $streams[$stream]['first'] === null
+                            ? $timestamp
+                            : min($streams[$stream]['first'], $timestamp);
+                        $streams[$stream]['last'] = $streams[$stream]['last'] === null
+                            ? $timestamp
+                            : max($streams[$stream]['last'], $timestamp);
+                    }
+
+                    if ($srcPort === '80' || $dstPort === '80') {
+                        $streams[$stream]['http_port'] = true;
+                    }
+
+                    if ($tcpFin === '1' || $tcpReset === '1') {
+                        $streams[$stream]['closed'] = true;
+                    }
+                }
+            }
+        } finally {
+            fclose($pipes[1]);
+            $exitCode = proc_close($process);
+        }
+
+        if ($total === 0) {
+            return null;
+        }
+
+        $parserWarning = ($exitCode ?? 0) !== 0
+            ? 'tshark exit code ' . $exitCode . '; summary dibuat dari packet yang masih dapat dibaca.'
+            : null;
+
+        arsort($sources);
+        arsort($destinations);
+        arsort($protocols);
+
+        $streamDurations = [];
+        $longLivedConnections = 0;
+        $connectionsToHttpPort = 0;
+        $openHttpConnections = 0;
+
+        foreach ($streams as $stream) {
+            if ($stream['http_port']) {
+                $connectionsToHttpPort++;
+
+                if (!$stream['closed']) {
+                    $openHttpConnections++;
+                }
+            }
+
+            if ($stream['first'] !== null && $stream['last'] !== null) {
+                $duration = max(0, $stream['last'] - $stream['first']);
+                $streamDurations[] = $duration;
+
+                if ($duration >= 30) {
+                    $longLivedConnections++;
+                }
             }
         }
-        return $pairs ? count($pairs) : null;
+
+        $durationSeconds = $streamDurations ? max($streamDurations) : null;
+        $avgConnectionDuration = $streamDurations
+            ? round(array_sum($streamDurations) / count($streamDurations), 2)
+            : null;
+        $throughputKbps = ($durationSeconds && $durationSeconds > 0 && $lengthSum > 0)
+            ? round(($lengthSum * 8) / 1000 / $durationSeconds, 2)
+            : null;
+
+        return [
+            'total_packets'        => $total,
+            'tcp_packets'          => $tcp,
+            'http_packets'         => $http,
+            'avg_packet_size'      => $lengthCount ? round($lengthSum / $lengthCount, 2) : null,
+            'top_source_ips'       => array_slice($sources, 0, 10, true),
+            'top_destination_ips'  => array_slice($destinations, 0, 10, true),
+            'protocol_distribution'=> $protocols,
+            'total_connections'    => count($streams) ?: null,
+            'avg_connection_duration' => $avgConnectionDuration,
+            'half_open_connections'=> $openHttpConnections ?: null,
+            'parsed_summary'       => [
+                'parser' => 'tshark-fields-stream',
+                'note'   => 'HTTP dihitung dari decoded HTTP atau TCP port 80.',
+                'duration' => $durationSeconds,
+                'throughput_kbps' => $throughputKbps,
+                'long_lived_connections' => $longLivedConnections,
+                'connections_to_http_port' => $connectionsToHttpPort,
+                'open_http_connections' => $openHttpConnections,
+                'warning' => $parserWarning,
+            ],
+        ];
+    }
+
+    private function findExecutable(string $binary): ?string
+    {
+        $output = [];
+        $code = 1;
+        @exec('command -v ' . escapeshellarg($binary) . ' 2>/dev/null', $output, $code);
+
+        if ($code !== 0 || empty($output[0])) {
+            return null;
+        }
+
+        return trim($output[0]);
     }
 
     private function emptySummary(string $note): array
@@ -345,7 +437,7 @@ class AcquisitionParser
             'total_connections'    => null,
             'avg_connection_duration' => null,
             'half_open_connections'=> null,
-            'parsed_summary'       => ['parser' => 'none', 'note' => $note],
+            'parsed_summary'       => ['note' => $note],
         ];
     }
 }

@@ -1,9 +1,13 @@
 @extends('layouts.app')
 
 @section('title', 'Proses Analisis')
-@section('subtitle', 'Korelasi data akuisisi & validasi, lalu jalankan ekstraksi fitur dan validasi AI.')
+@section('subtitle', 'Korelasi data akuisisi & validasi, lalu jalankan ekstraksi fitur dan AI Analysis.')
 
 @section('content')
+
+@php
+    $scoreLabel = fn (?string $category) => \App\Support\AttackPresentation::scoreLabel($category);
+@endphp
 
 <div class="card">
     <div class="card-header">
@@ -61,7 +65,7 @@
                         <td>
                             @if ($exp->extractedFeature)
                                 <span class="font-mono text-amber-300">{{ $exp->extractedFeature->final_attack_score }}</span>
-                                <p class="text-[11px] text-slate-500">{{ $exp->extractedFeature->attack_category }}</p>
+                                <p class="text-[11px] text-slate-500">{{ $scoreLabel($exp->extractedFeature->attack_category) }}</p>
                             @else <span class="text-xs text-slate-500">—</span>
                             @endif
                         </td>
@@ -76,7 +80,7 @@
                                     @csrf
                                     <button class="btn-ghost text-xs" type="submit">Korelasi</button>
                                 </form>
-                                <a href="{{ route('ai.show', $exp) }}" class="btn-ghost text-xs">Validasi AI</a>
+                                <a href="{{ route('ai.show', $exp) }}" class="btn-ghost text-xs">AI Analysis</a>
                                 <a href="{{ route('reports.create', $exp) }}" class="btn-success text-xs">Generate Laporan</a>
                             @else
                                 <a href="{{ route('experiments.show', $exp) }}" class="btn-ghost text-xs">Detail</a>

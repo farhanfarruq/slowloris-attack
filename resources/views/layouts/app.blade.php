@@ -47,7 +47,7 @@
             @yield('content')
 
             <footer class="mt-12 pt-6 border-t border-gray-200 text-xs text-gray-500 text-center">
-                Slowloris Lab - dashboard pribadi
+                Network Attack Analysis Lab - dashboard pribadi
             </footer>
         </main>
     </div>

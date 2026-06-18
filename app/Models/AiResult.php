@@ -17,6 +17,9 @@ class AiResult extends Model
         'missing_evidence' => 'array',
         'raw_request' => 'array',
         'raw_response' => 'array',
+        'logic_gate_reasons' => 'array',
+        'ai_chart_data' => 'array',
+        'comparison_summary' => 'array',
         'is_simulated' => 'boolean',
     ];
 

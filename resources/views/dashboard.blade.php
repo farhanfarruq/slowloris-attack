@@ -13,13 +13,14 @@
         'inconclusive'    => ['Inconclusive',           'badge-slate', 'status-summary-card--inconclusive'],
         'pending'         => ['Belum Dianalisis',       'badge-slate', 'status-summary-card--pending'],
     ];
-    $scoreTone = fn (?string $category) => match ($category) {
-        'Normal' => 'score-tone-normal',
-        'Suspicious' => 'score-tone-suspicious',
-        'Possible Slowloris' => 'score-tone-possible',
-        'Strong Slowloris Indication' => 'score-tone-strong',
-        default => 'score-tone-neutral',
-    };
+    $scoreTone = fn (?string $category) => \App\Support\AttackPresentation::scoreTone($category);
+    $scoreLabel = fn (?string $category) => \App\Support\AttackPresentation::scoreLabel($category);
+    $trafficLabels = [
+        'normal' => 'normal',
+        'slowloris_lab' => 'attack lab',
+        'mixed' => 'mixed',
+        'unknown' => 'unknown',
+    ];
 @endphp
 
 <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
@@ -46,7 +47,7 @@
     <div class="stat-card">
         <p class="text-xs text-slate-400 uppercase tracking-wider">Confidence Jawaban AI (Semua Kelas)</p>
         <p class="mt-2 text-3xl font-semibold text-sky-300">{{ $stats['avg_ai_confidence_all'] }}<span class="text-base">%</span></p>
-        <p class="text-xs text-slate-500 mt-1">Bukan confidence serangan. Sub-skor di bawah hanya untuk yang Slowloris Detected: <span class="text-rose-300 font-mono">{{ $stats['avg_ai_confidence_attack'] }}%</span></p>
+        <p class="text-xs text-slate-500 mt-1">Bukan confidence serangan. Sub-skor di bawah hanya untuk model yang mendeteksi attack: <span class="text-rose-300 font-mono">{{ $stats['avg_ai_confidence_attack'] }}%</span></p>
     </div>
     <div class="stat-card">
         <p class="text-xs text-slate-400 uppercase tracking-wider">Total Eksperimen</p>
@@ -103,9 +104,12 @@
 <div class="card mt-6">
     <div class="card-header">
         <p class="card-title">Eksperimen Terbaru</p>
-        <a href="{{ route('experiments.create') }}" class="text-xs text-cyan-300 hover:text-cyan-200">+ Buat eksperimen</a>
+        <div class="flex items-center gap-3">
+            <a href="{{ route('experiments.index') }}" class="text-xs text-cyan-300 hover:text-cyan-200">Lihat semua</a>
+            <a href="{{ route('experiments.create') }}" class="text-xs text-cyan-300 hover:text-cyan-200">+ Buat eksperimen</a>
+        </div>
     </div>
-    <div class="overflow-x-auto">
+    <div class="max-h-[760px] overflow-auto">
         <table class="table-stripe">
             <thead>
                 <tr>
@@ -125,12 +129,12 @@
                         <td class="font-mono text-cyan-300">{{ $exp->experiment_code }}</td>
                         <td class="text-slate-200">{{ $exp->name }}</td>
                         <td class="text-slate-400">{{ $exp->experiment_date?->format('d M Y') }}</td>
-                        <td><span class="badge-cyan">{{ str_replace('_', ' ', $exp->traffic_type) }}</span></td>
+                        <td><span class="badge-cyan">{{ $trafficLabels[$exp->traffic_type] ?? str_replace('_', ' ', $exp->traffic_type) }}</span></td>
                         <td>
                             @if ($exp->extractedFeature)
                                 <span class="score-pill {{ $scoreTone($exp->extractedFeature->attack_category) }}">
                                     <span class="score-pill-value">{{ $exp->extractedFeature->final_attack_score }}</span>
-                                    <span class="score-pill-label">{{ $exp->extractedFeature->attack_category }}</span>
+                                    <span class="score-pill-label">{{ $scoreLabel($exp->extractedFeature->attack_category) }}</span>
                                 </span>
                             @else
                                 <span class="text-xs text-slate-500">—</span>

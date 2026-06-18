@@ -33,7 +33,7 @@ class DashboardController extends Controller
 
         $recentExperiments = Experiment::latest()
             ->with(['extractedFeature', 'aiResults'])
-            ->take(8)
+            ->take(20)
             ->get();
 
         $finalDecisionSummary = Experiment::with('extractedFeature')->get()

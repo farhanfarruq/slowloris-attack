@@ -18,8 +18,15 @@ use Illuminate\Support\Str;
  */
 class AiValidationService
 {
-    public function __construct(private AnalysisService $analysis)
-    {
+    public function __construct(
+        private AnalysisService $analysis,
+        private ?AiPromptBuilder $promptBuilder = null,
+        private ?AnalysisComparisonService $comparison = null,
+        private ?ToolProfileService $toolProfiles = null,
+    ) {
+        $this->toolProfiles ??= new ToolProfileService();
+        $this->promptBuilder ??= new AiPromptBuilder($this->toolProfiles);
+        $this->comparison ??= new AnalysisComparisonService($this->toolProfiles);
     }
 
     public function listProviders(): array
@@ -39,6 +46,7 @@ class AiValidationService
                 'has_key' => ($cfg['driver'] ?? null) === 'ollama' ? true : !empty($cfg['api_key']),
                 'model' => $cfg['model'] ?? null,
                 'api_url' => $cfg['api_url'] ?? null,
+                'tool_profile' => $cfg['tool_profile'] ?? null,
                 'use_live_api' => (bool) ($cfg['use_live_api'] ?? false),
                 'can_run' => $this->providerCanRun($key, $cfg),
             ];
@@ -60,6 +68,7 @@ class AiValidationService
                 'has_key' => ($cfg['driver'] ?? null) === 'ollama' ? false : !empty($cfg['api_key']),
                 'model' => $cfg['model'] ?? null,
                 'api_url' => $cfg['api_url'] ?? null,
+                'tool_profile' => $cfg['tool_profile'] ?? null,
                 'use_live_api' => (bool) ($cfg['use_live_api'] ?? false),
                 'can_run' => $this->providerCanRun($key, $cfg),
             ];
@@ -73,12 +82,16 @@ class AiValidationService
         $payload = $this->analysis->buildAiPayload($experiment);
         $validationRunId = (string) Str::uuid();
         $results = [];
+        $toolProfile = $this->toolProfiles->normalize($payload['tool_profile'] ?? $experiment->tool_profile ?? null);
 
         $providers = $this->configuredProviders();
 
         foreach ($providerKeys as $key) {
             $config = $providers[$key] ?? null;
             if (!$config) continue;
+            if (!empty($config['tool_profile']) && $this->toolProfiles->normalize($config['tool_profile']) !== $toolProfile) {
+                continue;
+            }
 
             try {
                 $response = $this->dispatch($key, $config, $payload);
@@ -89,10 +102,17 @@ class AiValidationService
 
             $attributes = [
                 'experiment_id'        => $experiment->id,
+                'tool_profile'         => $toolProfile,
+                'attack_pattern'       => $payload['attack_pattern'] ?? null,
+                'analysis_profile_key' => $payload['analysis_profile_key'] ?? $toolProfile,
                 'model_name'           => $response['model_name'],
                 'model_version'        => $config['model'] ?? null,
                 'classification'       => $response['classification'],
                 'confidence_score'     => (float) $response['confidence_score'],
+                'logic_classification' => $payload['logic_analysis']['classification'] ?? null,
+                'logic_score'          => $payload['logic_analysis']['score'] ?? null,
+                'logic_gate_reasons'   => $payload['logic_analysis']['gate_reasons'] ?? [],
+                'ai_chart_data'        => $response['chart_data'] ?? $this->defaultAiChartData($response),
                 'reason'               => $response['reason'] ?? null,
                 'supporting_indicators'=> $response['supporting_indicators'] ?? [],
                 'missing_evidence'     => $response['missing_evidence'] ?? [],
@@ -107,6 +127,8 @@ class AiValidationService
             }
 
             $ai = AiResult::create($attributes);
+            $ai->comparison_summary = $this->comparison->summarize($experiment->fresh(), $ai);
+            $ai->save();
 
             $results[] = $ai;
         }
@@ -120,9 +142,9 @@ class AiValidationService
             $radar = $features->radarScores();
 
             // Hormati evidence gating: AI tidak boleh men-trigger attack_detected sendirian.
-            $scoring = new ScoringService();
+            $scoring = new ScoringService($this->toolProfiles);
             $rawFeatures = $this->buildRawFeaturesFromExtracted($features);
-            $evaluation = $scoring->evaluateExperiment($experiment, $rawFeatures, $radar);
+            $evaluation = $scoring->evaluateExperiment($experiment, $rawFeatures, $radar, $toolProfile);
 
             $features->final_attack_score = $evaluation['final_attack_score'];
             $features->attack_category    = $evaluation['attack_category'];
@@ -166,7 +188,7 @@ class AiValidationService
     private function attackConfidenceAverage(array $results): float
     {
         $attackResults = collect($results)
-            ->filter(fn ($result) => $this->isAttackClassification((string) $result->classification));
+            ->filter(fn ($result) => $this->isAttackClassification((string) $result->classification, $result->tool_profile ?? null));
 
         return round($attackResults->avg('confidence_score') ?? 0, 2);
     }
@@ -177,9 +199,13 @@ class AiValidationService
      */
     private function buildRawFeaturesFromExtracted(\App\Models\ExtractedFeature $f): array
     {
-        return [
+        $raw = is_array($f->raw_features) ? $f->raw_features : [];
+
+        return array_merge($raw, [
             'total_packets'             => (float) ($f->total_packets ?? 0),
             'tcp_packets'               => (float) ($f->tcp_packets ?? 0),
+            'udp_packets'               => (float) ($raw['udp_packets'] ?? 0),
+            'icmp_packets'              => (float) ($raw['icmp_packets'] ?? 0),
             'http_packets'              => (float) ($f->http_packets ?? 0),
             'avg_packet_size'           => (float) ($f->avg_packet_size ?? 0),
             'duration_seconds'          => (float) ($f->duration_seconds ?? 0),
@@ -196,12 +222,12 @@ class AiValidationService
             'baseline_avg_connections'  => (float) ($f->baseline_avg_connections ?? ScoringService::BASELINE_DEFAULT_CONNECTIONS),
             'baseline_throughput_kbps'  => (float) ($f->baseline_throughput_kbps ?? ScoringService::BASELINE_DEFAULT_THROUGHPUT),
             'baseline_alert_count'      => (float) ($f->baseline_alert_count ?? ScoringService::BASELINE_DEFAULT_ALERTS),
-        ];
+        ]);
     }
 
-    private function isAttackClassification(string $classification): bool
+    private function isAttackClassification(string $classification, ?string $toolProfile = null): bool
     {
-        return $classification === 'Slowloris Detected';
+        return $this->toolProfiles->isDetectedLabel($classification, $toolProfile);
     }
 
     private function dispatch(string $key, array $config, array $payload): array
@@ -273,6 +299,7 @@ class AiValidationService
                     'api_key' => $setting->api_key,
                     'api_url' => $setting->api_url,
                     'model' => $setting->model,
+                    'tool_profile' => $setting->tool_profile,
                     'use_live_api' => (bool) $setting->use_live_api,
                 ];
             }
@@ -292,6 +319,7 @@ class AiValidationService
                     'api_key' => $cfg['api_key'] ?? null,
                     'api_url' => $cfg['api_url'] ?? null,
                     'model' => $cfg['model'] ?? null,
+                    'tool_profile' => $cfg['tool_profile'] ?? null,
                     'use_live_api' => false,
                 ];
             }
@@ -306,6 +334,7 @@ class AiValidationService
                 $providers[$key]['api_key'] = $setting->api_key ?: ($providers[$key]['api_key'] ?? null);
                 $providers[$key]['api_url'] = $setting->api_url ?: ($providers[$key]['api_url'] ?? null);
                 $providers[$key]['model'] = $setting->model ?: ($providers[$key]['model'] ?? null);
+                $providers[$key]['tool_profile'] = $setting->tool_profile ?: ($providers[$key]['tool_profile'] ?? null);
                 $providers[$key]['use_live_api'] = (bool) $setting->use_live_api;
             }
         } catch (\Throwable $e) {
@@ -317,33 +346,10 @@ class AiValidationService
 
     private function buildPrompt(array $payload): array
     {
-        $schema = [
-            'model_name' => 'string; provider/model name; do not invent version if unknown',
-            'classification' => 'one of: Normal, Suspicious, Slowloris Detected, Inconclusive',
-            'confidence_score' => 'number 0-100; confidence in classification, not attack probability unless classification is Slowloris Detected',
-            'reason' => 'short evidence-based conclusion using only payload values',
-            'supporting_indicators' => ['strings with exact metric names and values from payload'],
-            'missing_evidence' => ['strings naming missing or weak evidence'],
-            'recommendation' => 'defensive validation or monitoring next step',
-        ];
+        $prompt = $this->promptBuilder->build($payload);
+        $prompt['system'] .= "\nCompatibility contract: Jawab HANYA JSON valid. payload.evidence_contract.slowloris_detected_allowed is a legacy Slowloris-only key; for other tool profiles use payload.evidence_contract.detected_allowed and required_for_detected. Koneksi banyak saja tidak cukup untuk detected classification.";
 
-        $system = "Anda adalah validator keamanan jaringan untuk traffic lab pribadi terisolasi. Tugas Anda HANYA memvalidasi indikasi Slowloris/Slow HTTP DoS dari payload ringkasan, bukan menebak dari pengetahuan umum.\n"
-                . "Jawab HANYA JSON valid. Tidak boleh markdown, komentar, atau teks di luar JSON.\n"
-                . "Schema wajib: " . json_encode($schema, JSON_UNESCAPED_UNICODE) . "\n"
-                . "Aturan anti-halusinasi lintas model:\n"
-                . "1. Gunakan hanya angka dan field yang ada di payload. Jangan membuat IP, timestamp, jumlah koneksi, nama rule, atau packet detail baru.\n"
-                . "2. Label 'Slowloris Detected' hanya boleh jika payload.evidence_contract.slowloris_detected_allowed bernilai true.\n"
-                . "3. Jika evidence_contract menolak deteksi, classification harus 'Suspicious', 'Normal', atau 'Inconclusive' sesuai bukti; jelaskan missing_evidence.\n"
-                . "4. HTTP burst pendek, iPerf/bandwidth test, portscan, dan normal-baseline tidak boleh dilabeli Slowloris Detected.\n"
-                . "5. Koneksi banyak saja, TCP dominan saja, atau confidence model saja tidak cukup untuk Slowloris Detected.\n"
-                . "6. Untuk 'Slowloris Detected', supporting_indicators wajib menyebut minimal dua bukti utama dari payload: long-lived HTTP connections, low bandwidth with many connections, relevant Snort/Slow HTTP alert.\n"
-                . "7. Jika payload tidak cukup, ambigu, atau kontradiktif, gunakan 'Inconclusive'.\n"
-                . "8. confidence_score adalah keyakinan terhadap label yang dipilih. Untuk 'Suspicious', confidence bukan probabilitas Slowloris.\n";
-
-        $user = "Validasi payload eksperimen berikut. Ikuti evidence_contract sebagai batas keputusan tertinggi.\n\n"
-              . json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
-
-        return ['system' => $system, 'user' => $user];
+        return $prompt;
     }
 
     private function callOpenAiCompatible(array $config, array $payload): array
@@ -450,19 +456,24 @@ class AiValidationService
     private function normalizeResponse(?array $parsed, string $label, array $payload = []): array
     {
         $parsed = is_array($parsed) ? $parsed : [];
-        $classification = $this->normalizeClassification($parsed['classification'] ?? null);
+        $toolProfile = $this->toolProfiles->normalize($payload['tool_profile'] ?? $payload['evidence_contract']['tool_profile'] ?? null);
+        $detectedLabel = $this->toolProfiles->detectedLabel($toolProfile);
+        $classification = $this->normalizeClassification($parsed['classification'] ?? null, $toolProfile);
         $confidence = $this->clampConfidence($parsed['confidence_score'] ?? 0);
-        $supportingIndicators = $this->cleanStringList($parsed['supporting_indicators'] ?? []);
+        $supportingIndicators = $this->cleanIndicatorList($parsed['supporting_indicators'] ?? []);
         $missingEvidence = $this->cleanStringList($parsed['missing_evidence'] ?? []);
+        $falsePositiveConsiderations = $this->cleanStringList($parsed['false_positive_considerations'] ?? []);
         $reason = $this->cleanNullableString($parsed['reason'] ?? null);
         $recommendation = $this->cleanNullableString($parsed['recommendation'] ?? null);
+        $chartData = is_array($parsed['chart_data'] ?? null) ? $parsed['chart_data'] : [];
+        $logicComparison = is_array($parsed['logic_comparison'] ?? null) ? $parsed['logic_comparison'] : [];
         $downgradeReasons = [];
 
-        if ($classification === 'Slowloris Detected') {
+        if ($classification === $detectedLabel) {
             $contract = is_array($payload['evidence_contract'] ?? null) ? $payload['evidence_contract'] : [];
 
-            if (!($contract['slowloris_detected_allowed'] ?? false)) {
-                $downgradeReasons[] = 'Evidence contract menolak label Slowloris Detected.';
+            if (!($contract['detected_allowed'] ?? $contract['slowloris_detected_allowed'] ?? false)) {
+                $downgradeReasons[] = 'Evidence contract menolak label ' . $detectedLabel . '.';
                 $missingEvidence = array_values(array_unique(array_merge(
                     $missingEvidence,
                     $this->cleanStringList($contract['gate_reasons'] ?? []),
@@ -483,24 +494,31 @@ class AiValidationService
 
         return [
             'model_name'            => $this->cleanNullableString($parsed['model_name'] ?? null) ?: $label,
+            'tool_profile'          => $toolProfile,
+            'attack_pattern'        => $this->cleanNullableString($parsed['attack_pattern'] ?? ($payload['attack_pattern'] ?? null)),
             'classification'        => $classification,
             'confidence_score'      => $confidence,
             'reason'                => $reason,
             'supporting_indicators' => $supportingIndicators,
             'missing_evidence'      => $missingEvidence,
+            'false_positive_considerations' => $falsePositiveConsiderations,
+            'logic_comparison'      => $logicComparison,
+            'chart_data'            => $this->normalizeChartData($chartData, $confidence, $supportingIndicators, $missingEvidence),
             'recommendation'        => $recommendation,
             'is_simulated'          => false,
         ];
     }
 
-    private function normalizeClassification(mixed $value): string
+    private function normalizeClassification(mixed $value, ?string $toolProfile = null): string
     {
         $normalized = strtolower(trim((string) $value));
+        $detectedLabel = $this->toolProfiles->detectedLabel($toolProfile);
 
         return match ($normalized) {
             'normal' => 'Normal',
             'suspicious' => 'Suspicious',
             'slowloris detected' => 'Slowloris Detected',
+            strtolower($detectedLabel) => $detectedLabel,
             'inconclusive' => 'Inconclusive',
             default => 'Inconclusive',
         };
@@ -530,6 +548,67 @@ class AiValidationService
         }
 
         return array_slice(array_values(array_unique($clean)), 0, 12);
+    }
+
+    private function cleanIndicatorList(mixed $value): array
+    {
+        $items = is_array($value) ? $value : [$value];
+        $clean = [];
+
+        foreach ($items as $item) {
+            if (is_array($item)) {
+                $field = $this->cleanNullableString($item['field'] ?? null);
+                $observedValue = $this->cleanNullableString($item['value'] ?? null);
+                $interpretation = $this->cleanNullableString($item['interpretation'] ?? null);
+                if ($field || $observedValue || $interpretation) {
+                    $clean[] = array_filter([
+                        'field' => $field,
+                        'value' => $observedValue,
+                        'interpretation' => $interpretation,
+                    ], fn ($v) => $v !== null);
+                }
+                continue;
+            }
+
+            if (is_scalar($item)) {
+                $text = trim((string) $item);
+                if ($text !== '') {
+                    $clean[] = $text;
+                }
+            }
+        }
+
+        return array_slice($clean, 0, 12);
+    }
+
+    private function normalizeChartData(array $chartData, float $confidence, array $supportingIndicators, array $missingEvidence): array
+    {
+        $chartData['confidence'] = $confidence;
+        $chartData['evidence_counts'] = $chartData['evidence_counts'] ?? [
+            'present' => count($supportingIndicators),
+            'missing' => count($missingEvidence),
+            'blocking' => 0,
+        ];
+        $chartData['indicator_scores'] = $chartData['indicator_scores'] ?? collect($supportingIndicators)
+            ->take(6)
+            ->map(fn ($item, int $idx) => [
+                'label' => is_array($item) ? ($item['field'] ?? 'indicator_' . ($idx + 1)) : 'indicator_' . ($idx + 1),
+                'score' => max(10, min(100, $confidence - ($idx * 8))),
+            ])
+            ->values()
+            ->all();
+
+        return $chartData;
+    }
+
+    private function defaultAiChartData(array $response): array
+    {
+        return $this->normalizeChartData(
+            is_array($response['chart_data'] ?? null) ? $response['chart_data'] : [],
+            (float) ($response['confidence_score'] ?? 0),
+            is_array($response['supporting_indicators'] ?? null) ? $response['supporting_indicators'] : [],
+            is_array($response['missing_evidence'] ?? null) ? $response['missing_evidence'] : [],
+        );
     }
 
     private function cleanNullableString(mixed $value): ?string
@@ -611,7 +690,7 @@ class AiValidationService
             'reason'                => 'Provider tidak menghasilkan klasifikasi live: ' . $reason,
             'supporting_indicators' => [],
             'missing_evidence'      => ['Tidak ada respons model live yang valid.'],
-            'recommendation'        => 'Isi API key, aktifkan live API, atau jalankan Ollama lokal sebelum validasi AI.',
+            'recommendation'        => 'Isi API key, aktifkan live API, atau jalankan Ollama lokal sebelum AI Analysis.',
             'is_simulated'          => false,
         ];
     }
@@ -637,11 +716,11 @@ class AiValidationService
         // Voting AI tidak boleh menjadi keputusan akhir tanpa bukti Wireshark+Snort.
         // experiment_status sudah di-gate di runForExperiment(); di sini kita hanya
         // melaporkan apa yang model katakan.
-        $finalDecision = match ($topClassification) {
-            'Slowloris Detected' => 'Indikasi Slowloris dari voting AI (perlu konfirmasi Wireshark + Snort)',
-            'Normal'             => 'Voting AI: Traffic normal',
-            'Suspicious'         => 'Voting AI: Suspicious, perlu validasi lanjutan',
-            default              => 'Voting AI: Inconclusive',
+        $finalDecision = match (true) {
+            $this->isAttackClassification((string) $topClassification, $experiment->tool_profile ?? null) => 'Voting AI: Attack Detected (perlu konfirmasi Wireshark + Snort)',
+            $topClassification === 'Normal' => 'Voting AI: Traffic normal',
+            $topClassification === 'Suspicious' => 'Voting AI: Suspicious, perlu validasi lanjutan',
+            default => 'Voting AI: Inconclusive',
         };
 
         return [

@@ -9,6 +9,8 @@ CAPTURE_SECONDS="${CAPTURE_SECONDS:-90}"
 TARGET_LAB_DIR="${TARGET_LAB_DIR:-$HOME/slowloris-lab}"
 SNORT_CONF="${SNORT_CONF:-/etc/snort/snort.conf}"
 CAPTURE_FILTER="${CAPTURE_FILTER:-}"
+CAPTURE_SNAPLEN="${CAPTURE_SNAPLEN:-0}"
+CAPTURE_FILESIZE_KB="${CAPTURE_FILESIZE_KB:-0}"
 
 log() {
   printf '[target-monitor] %s\n' "$*"
@@ -85,9 +87,11 @@ capture_filter_for() {
   fi
 
   case "$SCENARIO" in
-    baseline-normal|http-burst|slow-http) printf '%s\n' 'tcp port 80' ;;
-    iperf-bandwidth) printf '%s\n' 'tcp port 5201' ;;
-    portscan) printf '%s\n' 'tcp' ;;
+    baseline-normal|http-burst|slow-http|torshammer) printf '%s\n' 'tcp port 80' ;;
+    loic|hoic|xerxes)    printf '%s\n' "host $ATTACKER_IP and tcp port 80" ;;
+    hping3)              printf '%s\n' "host $TARGET_IP" ;;
+    iperf-bandwidth)     printf '%s\n' 'tcp port 5201' ;;
+    portscan)            printf '%s\n' 'tcp' ;;
     *) printf '%s\n' "host $ATTACKER_IP and host $TARGET_IP" ;;
   esac
 }
@@ -109,21 +113,31 @@ main() {
   local final_capture="$capture_dir/${SCENARIO}-wireshark.pcapng"
   local final_alert="$validation_dir/${SCENARIO}-snort.log"
   local final_metrics="$validation_dir/${SCENARIO}-target-metrics.csv"
+  local done_marker="$validation_dir/${SCENARIO}-monitor.done"
   local dumpcap_log="$log_dir/${SCENARIO}-dumpcap.log"
   local snort_log="$log_dir/${SCENARIO}-snort-run.log"
 
   mkdir -p "$capture_dir" "$validation_dir" "$log_dir"
-  rm -f "$final_capture" "$final_alert" "$final_metrics" "$dumpcap_log" "$snort_log"
+  rm -f "$final_capture" "$final_alert" "$final_metrics" "$done_marker" "$dumpcap_log" "$snort_log"
   sudo rm -rf "$tmp_capture" "$tmp_snort_dir"
   sudo mkdir -p "$tmp_snort_dir"
 
   log "Mulai dumpcap Wireshark selama ${CAPTURE_SECONDS}s: $final_capture"
   log "Filter capture: $filter"
-  sudo timeout "${CAPTURE_SECONDS}s" dumpcap -i "$TARGET_IFACE" -f "$filter" -w "$tmp_capture" >"$dumpcap_log" 2>&1 &
+  local dumpcap_args=(-i "$TARGET_IFACE" -f "$filter" -w "$tmp_capture" -a "duration:${CAPTURE_SECONDS}")
+  if [[ "$CAPTURE_SNAPLEN" =~ ^[0-9]+$ && "$CAPTURE_SNAPLEN" -gt 0 ]]; then
+    dumpcap_args+=(-s "$CAPTURE_SNAPLEN")
+    log "Snaplen capture: ${CAPTURE_SNAPLEN} bytes"
+  fi
+  if [[ "$CAPTURE_FILESIZE_KB" =~ ^[0-9]+$ && "$CAPTURE_FILESIZE_KB" -gt 0 ]]; then
+    dumpcap_args+=(-a "filesize:${CAPTURE_FILESIZE_KB}")
+    log "Batas file capture: ${CAPTURE_FILESIZE_KB} KB"
+  fi
+  sudo dumpcap "${dumpcap_args[@]}" >"$dumpcap_log" 2>&1 &
   local dumpcap_pid=$!
 
-  log "Mulai Snort selama ${CAPTURE_SECONDS}s: $final_alert"
-  sudo timeout "${CAPTURE_SECONDS}s" snort -A fast -q -c "$SNORT_CONF" -i "$TARGET_IFACE" -l "$tmp_snort_dir" >"$snort_log" 2>&1 &
+  log "Mulai Snort selama capture berjalan: $final_alert"
+  sudo snort -A fast -q -c "$SNORT_CONF" -i "$TARGET_IFACE" -l "$tmp_snort_dir" "$filter" >"$snort_log" 2>&1 &
   local snort_pid=$!
 
   log "Mulai sampling metrik target: $final_metrics"
@@ -133,6 +147,9 @@ main() {
   set +e
   wait "$dumpcap_pid"
   local dumpcap_status=$?
+  sudo pkill -TERM -f "^[s]nort .* -l $tmp_snort_dir" >/dev/null 2>&1 || true
+  sleep 2
+  sudo pkill -KILL -f "^[s]nort .* -l $tmp_snort_dir" >/dev/null 2>&1 || true
   wait "$snort_pid"
   local snort_status=$?
   kill "$metrics_pid" >/dev/null 2>&1 || true
@@ -143,7 +160,7 @@ main() {
     cat "$dumpcap_log" >&2 || true
     die "dumpcap gagal dengan exit code $dumpcap_status"
   fi
-  if [[ "$snort_status" -ne 0 && "$snort_status" -ne 124 ]]; then
+  if [[ "$snort_status" -ne 0 && "$snort_status" -ne 124 && "$snort_status" -ne 130 && "$snort_status" -ne 143 && "$snort_status" -ne 137 ]]; then
     cat "$snort_log" >&2 || true
     die "snort gagal dengan exit code $snort_status"
   fi
@@ -164,6 +181,7 @@ main() {
   log "Selesai capture: $(du -h "$final_capture" | awk '{print $1}')"
   log "Selesai alert: $(du -h "$final_alert" | awk '{print $1}')"
   log "Selesai metrik: $(du -h "$final_metrics" | awk '{print $1}')"
+  : >"$done_marker"
 }
 
 main "$@"

@@ -40,6 +40,11 @@
                             <option value="slow-http">
                             <option value="portscan">
                             <option value="iperf-bandwidth">
+                            <option value="loic">
+                            <option value="hoic">
+                            <option value="hping3">
+                            <option value="torshammer">
+                            <option value="xerxes">
                             <option value="manual">
                         </datalist>
                     </div>

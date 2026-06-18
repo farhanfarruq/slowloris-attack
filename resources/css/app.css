@@ -157,19 +157,19 @@
         @apply mt-1 text-sm font-bold leading-tight;
     }
     .score-tone-normal {
-        @apply border-emerald-300 bg-emerald-100 text-emerald-950;
+        @apply border-emerald-300 bg-emerald-100 text-gray-950;
     }
     .score-tone-suspicious {
-        @apply border-amber-300 bg-amber-100 text-amber-950;
+        @apply border-amber-300 bg-amber-100 text-gray-950;
     }
     .score-tone-possible {
-        @apply border-orange-300 bg-orange-100 text-orange-950;
+        @apply border-orange-300 bg-orange-100 text-gray-950;
     }
     .score-tone-strong {
-        @apply border-red-300 bg-red-100 text-red-950;
+        @apply border-red-300 bg-red-100 text-gray-950;
     }
     .score-tone-neutral {
-        @apply border-zinc-400 bg-zinc-100 text-zinc-950;
+        @apply border-zinc-400 bg-zinc-100 text-gray-950;
     }
 }
 
@@ -191,9 +191,20 @@ body { background: #f8fafc; color: #111827; }
 .text-slate-500,
 .text-slate-600 { color: #374151 !important; }
 
-.text-cyan-200,
-.text-cyan-300,
-.text-cyan-400 { color: #2563eb !important; }
+[class*="text-blue-"],
+[class*="text-cyan-"],
+[class*="text-sky-"],
+[class*="text-emerald-"],
+[class*="text-green-"],
+[class*="text-amber-"],
+[class*="text-yellow-"],
+[class*="text-orange-"],
+[class*="text-red-"],
+[class*="text-rose-"],
+[class*="text-fuchsia-"],
+[class*="text-violet-"],
+[class*="text-purple-"],
+[class*="text-indigo-"] { color: #111827 !important; }
 
 .bg-slate-950,
 .bg-slate-900,
@@ -220,4 +231,4 @@ body { background: #f8fafc; color: #111827; }
 
 .hover\:text-slate-100:hover { color: #111827 !important; }
 
-code { color: #1d4ed8; }
+code { color: #111827; }

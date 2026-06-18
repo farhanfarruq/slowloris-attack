@@ -4,12 +4,18 @@ namespace App\Http\Controllers;
 
 use App\Models\Experiment;
 use App\Services\AuditService;
+use App\Services\ToolProfileService;
+use App\Services\VmLabExperimentTemplateService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class ExperimentController extends Controller
 {
-    public function __construct(private AuditService $audit)
-    {
+    public function __construct(
+        private AuditService $audit,
+        private ToolProfileService $toolProfiles,
+        private VmLabExperimentTemplateService $vmLabTemplates,
+    ) {
     }
 
     public function index(Request $request)
@@ -25,15 +31,26 @@ class ExperimentController extends Controller
             $query->where('traffic_type', $type);
         }
 
-        $experiments = $query->latest()->paginate(15)->withQueryString();
+        if ($profile = $request->get('tool_profile')) {
+            $query->where('tool_profile', $this->toolProfiles->normalize($profile));
+        }
 
-        return view('experiments.index', compact('experiments'));
+        if ($targetPlatform = $request->get('target_platform')) {
+            $query->where('target_platform', $targetPlatform);
+        }
+
+        $experiments = $query->latest()->paginate(15)->withQueryString();
+        $toolProfiles = $this->toolProfiles->options();
+
+        return view('experiments.index', compact('experiments', 'toolProfiles'));
     }
 
     public function create()
     {
         $this->authorizeAdmin();
-        return view('experiments.create');
+        return view('experiments.create', [
+            'toolProfiles' => $this->toolProfiles->options(),
+        ]);
     }
 
     public function store(Request $request)
@@ -49,6 +66,10 @@ class ExperimentController extends Controller
             'capture_duration'  => ['nullable', 'integer', 'min:1', 'max:86400'],
             'notes'             => ['nullable', 'string', 'max:2000'],
             'scenario_key'      => ['required', 'string', 'max:64', 'regex:/^[a-z0-9][a-z0-9_-]*$/'],
+            'tool_profile'      => ['required', Rule::in($this->toolProfiles->keys())],
+            'attack_pattern'    => ['nullable', 'string', 'max:80', 'regex:/^[a-z0-9][a-z0-9_-]*$/'],
+            'analysis_profile_key' => ['nullable', 'string', 'max:80', 'regex:/^[a-z0-9][a-z0-9_-]*$/'],
+            'target_platform'   => ['nullable', 'string', 'max:120'],
             'traffic_type'      => ['required', 'in:normal,slowloris_lab,mixed,unknown'],
             'ground_truth_label'=> ['nullable', 'in:normal,slowloris_lab,mixed,unknown'],
         ]);
@@ -56,12 +77,37 @@ class ExperimentController extends Controller
         $code = 'EXP-' . str_pad((string) (Experiment::max('id') + 1), 3, '0', STR_PAD_LEFT);
         $data['experiment_code'] = $code;
         $data['user_id'] = auth()->id();
+        $data['tool_profile'] = $this->toolProfiles->normalize($data['tool_profile'] ?? null);
+        $profile = $this->toolProfiles->get($data['tool_profile']);
+        $data['attack_pattern'] = $data['attack_pattern'] ?: ($profile['default_attack_pattern'] ?? null);
+        $data['analysis_profile_key'] = $data['analysis_profile_key'] ?: $data['tool_profile'];
+        $data['target_platform'] = $data['target_platform'] ?: 'vm_ubuntu_server';
 
         $experiment = Experiment::create($data);
         $this->audit->log('experiment.created', $experiment);
 
         return redirect()->route('experiments.show', $experiment)
             ->with('success', 'Eksperimen baru berhasil dibuat.');
+    }
+
+    public function createVmDrafts()
+    {
+        $this->authorizeAdmin();
+
+        $result = $this->vmLabTemplates->createMissingDrafts(auth()->id());
+        foreach ($result['created'] as $experiment) {
+            $this->audit->log('experiment.vm_draft_created', $experiment, [
+                'tool_profile' => $experiment->tool_profile,
+                'target_platform' => $experiment->target_platform,
+            ]);
+        }
+
+        return redirect()->route('experiments.index', ['target_platform' => 'vm_ubuntu_server'])
+            ->with(
+                'success',
+                count($result['created']) . ' draft eksperimen VM dibuat, '
+                . count($result['existing']) . ' sudah tersedia. Data serangan belum diisi.'
+            );
     }
 
     public function show(Experiment $experiment)
@@ -83,7 +129,10 @@ class ExperimentController extends Controller
     public function edit(Experiment $experiment)
     {
         $this->authorizeAdmin();
-        return view('experiments.edit', compact('experiment'));
+        return view('experiments.edit', [
+            'experiment' => $experiment,
+            'toolProfiles' => $this->toolProfiles->options(),
+        ]);
     }
 
     public function update(Request $request, Experiment $experiment)
@@ -99,9 +148,19 @@ class ExperimentController extends Controller
             'capture_duration'  => ['nullable', 'integer', 'min:1', 'max:86400'],
             'notes'             => ['nullable', 'string', 'max:2000'],
             'scenario_key'      => ['required', 'string', 'max:64', 'regex:/^[a-z0-9][a-z0-9_-]*$/'],
+            'tool_profile'      => ['required', Rule::in($this->toolProfiles->keys())],
+            'attack_pattern'    => ['nullable', 'string', 'max:80', 'regex:/^[a-z0-9][a-z0-9_-]*$/'],
+            'analysis_profile_key' => ['nullable', 'string', 'max:80', 'regex:/^[a-z0-9][a-z0-9_-]*$/'],
+            'target_platform'   => ['nullable', 'string', 'max:120'],
             'traffic_type'      => ['required', 'in:normal,slowloris_lab,mixed,unknown'],
             'ground_truth_label'=> ['nullable', 'in:normal,slowloris_lab,mixed,unknown'],
         ]);
+
+        $data['tool_profile'] = $this->toolProfiles->normalize($data['tool_profile'] ?? null);
+        $profile = $this->toolProfiles->get($data['tool_profile']);
+        $data['attack_pattern'] = $data['attack_pattern'] ?: ($profile['default_attack_pattern'] ?? null);
+        $data['analysis_profile_key'] = $data['analysis_profile_key'] ?: $data['tool_profile'];
+        $data['target_platform'] = $data['target_platform'] ?: 'vm_ubuntu_server';
 
         $experiment->update($data);
         $this->audit->log('experiment.updated', $experiment);

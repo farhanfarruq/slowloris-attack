@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <title>{{ config('app.name', 'Slowloris Lab') }}</title>
+    <title>{{ config('app.name', 'Attack Analysis Lab') }}</title>
 
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600,700&display=swap" rel="stylesheet">
@@ -17,9 +17,9 @@
         <div class="w-full max-w-md">
             <div class="text-center mb-6">
                 <div class="inline-flex brand-logo-frame brand-logo-frame--login">
-                    <img src="{{ asset('cyber-criminal.png') }}" alt="Slowloris Lab" class="brand-logo-image">
+                    <img src="{{ asset('cyber-criminal.png') }}" alt="Network Attack Analysis Lab" class="brand-logo-image">
                 </div>
-                <h1 class="mt-3 text-xl font-semibold text-gray-900 tracking-tight">Slowloris Lab</h1>
+                <h1 class="mt-3 text-xl font-semibold text-gray-900 tracking-tight">Attack Analysis Lab</h1>
                 <p class="text-xs text-gray-500 uppercase tracking-widest mt-1">Personal Dashboard</p>
             </div>
 

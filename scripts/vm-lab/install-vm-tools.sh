@@ -38,9 +38,9 @@ main() {
       sudo usermod -aG wireshark "$USER"
     fi
   else
-    log "Install tools Attacker: OpenSSH, curl, ab, slowhttptest, iPerf3, nmap"
+    log "Install tools Attacker: OpenSSH, curl, ab, slowhttptest, iPerf3, nmap, hping3"
     sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
-      openssh-server curl apache2-utils slowhttptest iperf3 nmap net-tools iproute2
+      openssh-server curl apache2-utils slowhttptest iperf3 nmap hping3 net-tools iproute2
 
     sudo systemctl enable --now ssh
   fi
