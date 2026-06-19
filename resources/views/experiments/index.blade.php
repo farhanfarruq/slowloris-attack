@@ -10,10 +10,14 @@
     $scoreLabel = fn (?string $category) => \App\Support\AttackPresentation::scoreLabel($category);
     $trafficLabels = [
         'normal' => 'normal',
-        'slowloris_lab' => 'attack lab',
+        'slowloris_lab' => 'slowloris lab (legacy)',
         'mixed' => 'mixed',
         'unknown' => 'unknown',
     ];
+
+    foreach ($toolProfiles as $profile) {
+        $trafficLabels[$profile['key']] = $profile['label'];
+    }
 @endphp
 
 <div class="card">
@@ -23,8 +27,8 @@
                    placeholder="Cari kode atau nama eksperimen..." class="input-field max-w-sm">
             <select name="traffic_type" class="input-field max-w-xs">
                 <option value="">Semua tipe traffic</option>
-                @foreach (['normal','slowloris_lab','mixed','unknown'] as $t)
-                    <option value="{{ $t }}" @selected(request('traffic_type')===$t)>{{ $trafficLabels[$t] ?? str_replace('_',' ',$t) }}</option>
+                @foreach ($trafficLabels as $key => $label)
+                    <option value="{{ $key }}" @selected(request('traffic_type')===$key)>{{ $label }}</option>
                 @endforeach
             </select>
             <select name="tool_profile" class="input-field max-w-xs">
@@ -43,6 +47,10 @@
         </form>
         @auth
             @if (auth()->user()->isAdmin())
+                <form action="{{ route('experiments.vm-drafts') }}" method="POST">
+                    @csrf
+                    <button type="submit" class="btn-secondary">Draft VM Profile</button>
+                </form>
                 <a href="{{ route('experiments.create') }}" class="btn-primary"><x-icon name="plus" class="w-4 h-4"/> Eksperimen Baru</a>
             @endif
         @endauth

@@ -1,6 +1,3 @@
-#!/usr/bin/env bash
-# attacker-loic.sh — LOIC-style HTTP flood / TCP flood / UDP flood
-# VM lab only. Hanya subnet 192.168.56.x diizinkan.
 set -Eeuo pipefail
 
 TARGET_IP="${TARGET_IP:-192.168.56.103}"

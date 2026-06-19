@@ -5,6 +5,19 @@
 
 @section('content')
 
+@php
+    $truthLabels = [
+        'unknown' => 'Unknown',
+        'normal' => 'Normal',
+        'slowloris_lab' => 'Slowloris Lab (legacy)',
+        'mixed' => 'Mixed',
+    ];
+
+    foreach ($toolProfiles as $profile) {
+        $truthLabels[$profile['key']] = $profile['label'];
+    }
+@endphp
+
 <div class="card max-w-3xl">
     <div class="card-header"><p class="card-title">Metadata Eksperimen</p></div>
     <form action="{{ route('experiments.store') }}" method="POST" class="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -20,10 +33,9 @@
         <div>
             <label class="label-field">Tipe Traffic *</label>
             <select name="traffic_type" class="input-field" required>
-                <option value="unknown">Unknown</option>
-                <option value="normal">Normal</option>
-                <option value="slowloris_lab">Attack Lab</option>
-                <option value="mixed">Mixed</option>
+                @foreach ($truthLabels as $key => $label)
+                    <option value="{{ $key }}" @selected(old('traffic_type', 'unknown') === $key)>{{ $label }}</option>
+                @endforeach
             </select>
         </div>
         <div>
@@ -83,10 +95,9 @@
             <label class="label-field">Ground Truth Label</label>
             <select name="ground_truth_label" class="input-field">
                 <option value="">— belum diketahui —</option>
-                <option value="normal">Normal</option>
-                <option value="slowloris_lab">Attack Lab</option>
-                <option value="mixed">Mixed</option>
-                <option value="unknown">Unknown</option>
+                @foreach ($truthLabels as $key => $label)
+                    <option value="{{ $key }}" @selected(old('ground_truth_label') === $key)>{{ $label }}</option>
+                @endforeach
             </select>
         </div>
         <div>

@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 set -Eeuo pipefail
 
 ATTACKER_SSH="${ATTACKER_SSH:-attacker@192.168.56.102}"

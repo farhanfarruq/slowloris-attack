@@ -7,9 +7,13 @@
     $trafficLabels = [
         'unknown' => 'unknown',
         'normal' => 'normal',
-        'slowloris_lab' => 'attack lab',
+        'slowloris_lab' => 'slowloris lab (legacy)',
         'mixed' => 'mixed',
     ];
+
+    foreach ($toolProfiles as $profile) {
+        $trafficLabels[$profile['key']] = $profile['label'];
+    }
 @endphp
 <div class="card max-w-3xl">
     <div class="card-header"><p class="card-title">Edit Metadata</p></div>
@@ -27,8 +31,8 @@
         <div>
             <label class="label-field">Tipe Traffic *</label>
             <select name="traffic_type" class="input-field" required>
-                @foreach (['unknown','normal','slowloris_lab','mixed'] as $t)
-                    <option value="{{ $t }}" @selected($experiment->traffic_type===$t)>{{ $trafficLabels[$t] ?? str_replace('_',' ',$t) }}</option>
+                @foreach ($trafficLabels as $key => $label)
+                    <option value="{{ $key }}" @selected(old('traffic_type', $experiment->traffic_type) === $key)>{{ $label }}</option>
                 @endforeach
             </select>
         </div>
@@ -71,8 +75,8 @@
             <label class="label-field">Ground Truth Label</label>
             <select name="ground_truth_label" class="input-field">
                 <option value="">—</option>
-                @foreach (['normal','slowloris_lab','mixed','unknown'] as $t)
-                    <option value="{{ $t }}" @selected($experiment->ground_truth_label===$t)>{{ $trafficLabels[$t] ?? str_replace('_',' ',$t) }}</option>
+                @foreach ($trafficLabels as $key => $label)
+                    <option value="{{ $key }}" @selected(old('ground_truth_label', $experiment->ground_truth_label) === $key)>{{ $label }}</option>
                 @endforeach
             </select>
         </div>

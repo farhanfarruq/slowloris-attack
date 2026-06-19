@@ -70,8 +70,8 @@ class ExperimentController extends Controller
             'attack_pattern'    => ['nullable', 'string', 'max:80', 'regex:/^[a-z0-9][a-z0-9_-]*$/'],
             'analysis_profile_key' => ['nullable', 'string', 'max:80', 'regex:/^[a-z0-9][a-z0-9_-]*$/'],
             'target_platform'   => ['nullable', 'string', 'max:120'],
-            'traffic_type'      => ['required', 'in:normal,slowloris_lab,mixed,unknown'],
-            'ground_truth_label'=> ['nullable', 'in:normal,slowloris_lab,mixed,unknown'],
+            'traffic_type'      => ['required', Rule::in($this->truthLabelOptions())],
+            'ground_truth_label'=> ['nullable', Rule::in($this->truthLabelOptions())],
         ]);
 
         $code = 'EXP-' . str_pad((string) (Experiment::max('id') + 1), 3, '0', STR_PAD_LEFT);
@@ -152,8 +152,8 @@ class ExperimentController extends Controller
             'attack_pattern'    => ['nullable', 'string', 'max:80', 'regex:/^[a-z0-9][a-z0-9_-]*$/'],
             'analysis_profile_key' => ['nullable', 'string', 'max:80', 'regex:/^[a-z0-9][a-z0-9_-]*$/'],
             'target_platform'   => ['nullable', 'string', 'max:120'],
-            'traffic_type'      => ['required', 'in:normal,slowloris_lab,mixed,unknown'],
-            'ground_truth_label'=> ['nullable', 'in:normal,slowloris_lab,mixed,unknown'],
+            'traffic_type'      => ['required', Rule::in($this->truthLabelOptions())],
+            'ground_truth_label'=> ['nullable', Rule::in($this->truthLabelOptions())],
         ]);
 
         $data['tool_profile'] = $this->toolProfiles->normalize($data['tool_profile'] ?? null);
@@ -181,5 +181,13 @@ class ExperimentController extends Controller
     private function authorizeAdmin(): void
     {
         abort_unless(auth()->user()?->isAdmin(), 403, 'Hanya peneliti yang dapat melakukan aksi ini.');
+    }
+
+    private function truthLabelOptions(): array
+    {
+        return array_values(array_unique(array_merge(
+            ['normal', 'slowloris_lab', 'mixed', 'unknown'],
+            $this->toolProfiles->keys()
+        )));
     }
 }
