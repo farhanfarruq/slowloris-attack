@@ -70,7 +70,7 @@ class ExperimentController extends Controller
             'attack_pattern'    => ['nullable', 'string', 'max:80', 'regex:/^[a-z0-9][a-z0-9_-]*$/'],
             'analysis_profile_key' => ['nullable', 'string', 'max:80', 'regex:/^[a-z0-9][a-z0-9_-]*$/'],
             'target_platform'   => ['nullable', 'string', 'max:120'],
-            'traffic_type'      => ['required', Rule::in($this->truthLabelOptions())],
+            'traffic_type'      => ['required', Rule::in($this->trafficTypeOptions())],
             'ground_truth_label'=> ['nullable', Rule::in($this->truthLabelOptions())],
         ]);
 
@@ -152,7 +152,7 @@ class ExperimentController extends Controller
             'attack_pattern'    => ['nullable', 'string', 'max:80', 'regex:/^[a-z0-9][a-z0-9_-]*$/'],
             'analysis_profile_key' => ['nullable', 'string', 'max:80', 'regex:/^[a-z0-9][a-z0-9_-]*$/'],
             'target_platform'   => ['nullable', 'string', 'max:120'],
-            'traffic_type'      => ['required', Rule::in($this->truthLabelOptions())],
+            'traffic_type'      => ['required', Rule::in($this->trafficTypeOptions())],
             'ground_truth_label'=> ['nullable', Rule::in($this->truthLabelOptions())],
         ]);
 
@@ -189,5 +189,10 @@ class ExperimentController extends Controller
             ['normal', 'slowloris_lab', 'mixed', 'unknown'],
             $this->toolProfiles->keys()
         )));
+    }
+
+    private function trafficTypeOptions(): array
+    {
+        return ['normal', 'slowloris_lab', 'mixed', 'unknown'];
     }
 }

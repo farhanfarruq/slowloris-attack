@@ -347,7 +347,7 @@ class AiValidationService
     private function buildPrompt(array $payload): array
     {
         $prompt = $this->promptBuilder->build($payload);
-        $prompt['system'] .= "\nCompatibility contract: Jawab HANYA JSON valid. payload.evidence_contract.slowloris_detected_allowed is a legacy Slowloris-only key; for other tool profiles use payload.evidence_contract.detected_allowed and required_for_detected. Koneksi banyak saja tidak cukup untuk detected classification.";
+        $prompt['system'] .= "\nKontrak kompatibilitas: jawab HANYA JSON valid. payload.evidence_contract.slowloris_detected_allowed adalah kunci legacy khusus Slowloris; untuk tool profile lain gunakan payload.evidence_contract.detected_allowed dan required_for_detected. Koneksi banyak saja tidak cukup untuk klasifikasi detected. Semua teks naratif pada output harus berbahasa Indonesia.";
 
         return $prompt;
     }
@@ -481,7 +481,7 @@ class AiValidationService
             }
 
             if ($supportingIndicators === []) {
-                $downgradeReasons[] = 'supporting_indicators kosong untuk label Slowloris Detected.';
+                $downgradeReasons[] = 'supporting_indicators kosong untuk label ' . $detectedLabel . '.';
             }
         }
 
@@ -489,7 +489,7 @@ class AiValidationService
             $classification = 'Inconclusive';
             $confidence = min($confidence, 40.0);
             $reason = trim(($reason ? $reason . ' ' : '') . implode(' ', $downgradeReasons));
-            $recommendation ??= 'Ulangi validasi dengan bukti Wireshark dan Snort yang lengkap sebelum menyatakan Slowloris.';
+            $recommendation ??= 'Ulangi validasi dengan bukti Wireshark dan Snort yang lengkap sebelum menyatakan ' . $detectedLabel . '.';
         }
 
         return [
@@ -513,6 +513,10 @@ class AiValidationService
     {
         $normalized = strtolower(trim((string) $value));
         $detectedLabel = $this->toolProfiles->detectedLabel($toolProfile);
+
+        if ($normalized === 'slowloris detected' && $this->toolProfiles->normalize($toolProfile) !== 'slowloris') {
+            return 'Inconclusive';
+        }
 
         return match ($normalized) {
             'normal' => 'Normal',
@@ -629,13 +633,21 @@ class AiValidationService
     {
         $radar = $payload['radar_score'] ?? [];
         $avg = collect($radar)->avg() ?? 0;
+        $toolProfile = $this->toolProfiles->normalize($payload['tool_profile'] ?? $payload['evidence_contract']['tool_profile'] ?? null);
+        $profileLabel = $this->toolProfiles->get($toolProfile)['label'] ?? $toolProfile;
+        $detectedLabel = $this->toolProfiles->detectedLabel($toolProfile);
 
         $classification = match (true) {
-            $avg >= 70 => 'Slowloris Detected',
+            $avg >= 70 => $detectedLabel,
             $avg >= 50 => 'Suspicious',
             $avg <= 25 => 'Normal',
             default    => 'Inconclusive',
         };
+
+        $contract = is_array($payload['evidence_contract'] ?? null) ? $payload['evidence_contract'] : [];
+        if ($classification === $detectedLabel && !($contract['detected_allowed'] ?? $contract['slowloris_detected_allowed'] ?? false)) {
+            $classification = 'Inconclusive';
+        }
 
         $supporting = [];
         if (($payload['connection_summary']['avg_connection_duration_seconds'] ?? 0) > 60) {
@@ -661,17 +673,19 @@ class AiValidationService
             $missing[] = 'Tipe alert Snort dominan belum tersedia';
         }
 
-        $reason = "Skor radar rata-rata $avg menunjukkan klasifikasi $classification."
+        $reason = "Skor radar rata-rata $avg untuk profil $profileLabel menunjukkan klasifikasi $classification."
             . ($extraReason ? " ($extraReason)" : '');
 
         return [
             'model_name'            => $label,
+            'tool_profile'          => $toolProfile,
+            'attack_pattern'        => $payload['attack_pattern'] ?? null,
             'classification'        => $classification,
             'confidence_score'      => round(min(100, $avg + 5), 2),
             'reason'                => $reason,
             'supporting_indicators' => $supporting,
             'missing_evidence'      => $missing,
-            'recommendation'        => 'Ulangi eksperimen dengan baseline iPerf3 lebih panjang dan korelasikan dengan rule Snort.',
+            'recommendation'        => 'Ulangi eksperimen dengan baseline normal yang cukup dan korelasikan dengan rule Snort untuk profil ' . $profileLabel . '.',
             'is_simulated'          => true,
         ];
     }

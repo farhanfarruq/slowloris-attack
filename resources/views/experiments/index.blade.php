@@ -15,9 +15,6 @@
         'unknown' => 'unknown',
     ];
 
-    foreach ($toolProfiles as $profile) {
-        $trafficLabels[$profile['key']] = $profile['label'];
-    }
 @endphp
 
 <div class="card">

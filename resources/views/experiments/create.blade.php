@@ -6,12 +6,13 @@
 @section('content')
 
 @php
-    $truthLabels = [
+    $trafficLabels = [
         'unknown' => 'Unknown',
         'normal' => 'Normal',
         'slowloris_lab' => 'Slowloris Lab (legacy)',
         'mixed' => 'Mixed',
     ];
+    $truthLabels = $trafficLabels;
 
     foreach ($toolProfiles as $profile) {
         $truthLabels[$profile['key']] = $profile['label'];
@@ -33,7 +34,7 @@
         <div>
             <label class="label-field">Tipe Traffic *</label>
             <select name="traffic_type" class="input-field" required>
-                @foreach ($truthLabels as $key => $label)
+                @foreach ($trafficLabels as $key => $label)
                     <option value="{{ $key }}" @selected(old('traffic_type', 'unknown') === $key)>{{ $label }}</option>
                 @endforeach
             </select>

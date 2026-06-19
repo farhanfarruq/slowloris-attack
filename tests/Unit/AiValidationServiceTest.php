@@ -76,10 +76,53 @@ class AiValidationServiceTest extends TestCase
             ],
         ]);
 
-        $this->assertStringContainsString('Jawab HANYA JSON valid', $prompt['system']);
+        $this->assertStringContainsString('Kembalikan JSON saja', $prompt['system']);
+        $this->assertStringContainsString('jawab HANYA JSON valid', $prompt['system']);
         $this->assertStringContainsString('payload.evidence_contract.slowloris_detected_allowed', $prompt['system']);
         $this->assertStringContainsString('Koneksi banyak saja', $prompt['system']);
+        $this->assertStringContainsString('Semua teks naratif pada output harus berbahasa Indonesia', $prompt['system']);
+        $this->assertStringNotContainsString('Compatibility contract:', $prompt['system']);
         $this->assertStringContainsString('"evidence_contract"', $prompt['user']);
+    }
+
+    public function test_simulated_fallback_uses_active_tool_profile_detected_label(): void
+    {
+        $result = $this->service()->simulated([
+            'tool_profile' => 'loic',
+            'attack_pattern' => 'http_flood',
+            'radar_score' => [
+                'packet_volume_score' => 90,
+                'connection_volume_score' => 90,
+                'throughput_pressure_score' => 90,
+            ],
+            'evidence_contract' => [
+                'detected_allowed' => true,
+                'tool_profile' => 'loic',
+            ],
+        ]);
+
+        $this->assertSame('loic', $result['tool_profile']);
+        $this->assertSame('LOIC Detected', $result['classification']);
+        $this->assertNotSame('Slowloris Detected', $result['classification']);
+    }
+
+    public function test_simulated_fallback_respects_detected_allowed_gate(): void
+    {
+        $result = $this->service()->simulated([
+            'tool_profile' => 'hping3',
+            'radar_score' => [
+                'packet_volume_score' => 95,
+                'transport_flood_score' => 95,
+                'snort_alert_score' => 95,
+            ],
+            'evidence_contract' => [
+                'detected_allowed' => false,
+                'tool_profile' => 'hping3',
+            ],
+        ]);
+
+        $this->assertSame('hping3', $result['tool_profile']);
+        $this->assertSame('Inconclusive', $result['classification']);
     }
 
     private function service(): AiValidationService

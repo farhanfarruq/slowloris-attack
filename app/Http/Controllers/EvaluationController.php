@@ -28,17 +28,24 @@ class EvaluationController extends Controller
 
         $rows = [];
         $profileBuckets = [];
+        $binaryTypes = [];
+        $profileTypes = [];
 
         foreach ($experiments as $exp) {
             $profileKey = $this->profileKey($exp);
             $actual = $this->actualClass($exp);
             $predicted = $this->predictedClass($exp);
+            $actualProfileKey = $this->actualProfileKey($exp);
+            $predictedProfileKey = $predicted === 'attack' ? $profileKey : null;
 
             if ($actual === 'unknown' || $predicted === 'unresolved') {
                 continue;
             }
 
-            $type = $this->resultType($actual, $predicted);
+            $binaryType = $this->binaryResultType($actual, $predicted);
+            $profileType = $this->profileResultType($actual, $predicted, $actualProfileKey, $predictedProfileKey);
+            $binaryTypes[] = $binaryType;
+            $profileTypes[] = $profileType;
 
             $rows[] = [
                 'experiment' => $exp,
@@ -46,17 +53,32 @@ class EvaluationController extends Controller
                 'profile_label' => $this->profileLabel($profileKey, $profiles),
                 'actual' => $actual,
                 'predicted' => $predicted,
+                'actual_profile_key' => $actualProfileKey,
+                'actual_profile_label' => $actualProfileKey ? $this->profileLabel($actualProfileKey, $profiles) : null,
+                'predicted_profile_key' => $predictedProfileKey,
+                'predicted_profile_label' => $predictedProfileKey ? $this->profileLabel($predictedProfileKey, $profiles) : null,
                 'final_score' => $exp->extractedFeature?->final_attack_score,
                 'category' => $exp->extractedFeature?->attack_category,
-                'type' => $type,
+                'binary_type' => $binaryType,
+                'type' => $profileType,
             ];
 
-            $bucketKey = $actual === 'normal' ? $profileKey : $this->actualProfileKey($exp);
-            $bucketKey ??= $profileKey;
-            $profileBuckets[$bucketKey][] = $type;
+            if ($profileType === 'PM') {
+                if ($actualProfileKey) {
+                    $profileBuckets[$actualProfileKey][] = 'FN';
+                }
+                if ($predictedProfileKey) {
+                    $profileBuckets[$predictedProfileKey][] = 'FP';
+                }
+                continue;
+            }
+
+            $bucketKey = $actual === 'normal' ? $profileKey : $actualProfileKey;
+            $profileBuckets[$bucketKey ?? $profileKey][] = $profileType;
         }
 
-        $metrics = $this->metrics(array_column($rows, 'type'));
+        $metrics = $this->metrics($profileTypes);
+        $binaryMetrics = $this->metrics($binaryTypes);
 
         $profileMetrics = collect($profiles)
             ->map(function (array $profile) use ($profileBuckets) {
@@ -75,7 +97,7 @@ class EvaluationController extends Controller
                 ->count(),
         ];
 
-        return view('evaluation.index', compact('rows', 'metrics', 'profileMetrics', 'coverage'));
+        return view('evaluation.index', compact('rows', 'metrics', 'binaryMetrics', 'profileMetrics', 'coverage'));
     }
 
     private function metrics(array $types): array
@@ -84,17 +106,18 @@ class EvaluationController extends Controller
         $tn = count(array_filter($types, fn (string $type) => $type === 'TN'));
         $fp = count(array_filter($types, fn (string $type) => $type === 'FP'));
         $fn = count(array_filter($types, fn (string $type) => $type === 'FN'));
+        $pm = count(array_filter($types, fn (string $type) => $type === 'PM'));
 
         $total = count($types);
         $accuracy  = $total > 0 ? ($tp + $tn) / $total : 0;
-        $precision = ($tp + $fp) > 0 ? $tp / ($tp + $fp) : 0;
-        $recall    = ($tp + $fn) > 0 ? $tp / ($tp + $fn) : 0;
+        $precision = ($tp + $fp + $pm) > 0 ? $tp / ($tp + $fp + $pm) : 0;
+        $recall    = ($tp + $fn + $pm) > 0 ? $tp / ($tp + $fn + $pm) : 0;
         $f1        = ($precision + $recall) > 0
                      ? 2 * ($precision * $recall) / ($precision + $recall)
                      : 0;
 
         $metrics = [
-            'tp' => $tp, 'tn' => $tn, 'fp' => $fp, 'fn' => $fn,
+            'tp' => $tp, 'tn' => $tn, 'fp' => $fp, 'fn' => $fn, 'pm' => $pm,
             'total'     => $total,
             'accuracy'  => round($accuracy * 100, 2),
             'precision' => round($precision * 100, 2),
@@ -162,7 +185,7 @@ class EvaluationController extends Controller
         };
     }
 
-    private function resultType(string $actual, string $predicted): string
+    private function binaryResultType(string $actual, string $predicted): string
     {
         return match (true) {
             $actual === 'attack' && $predicted === 'attack' => 'TP',
@@ -172,6 +195,19 @@ class EvaluationController extends Controller
             $actual === 'attack' && $predicted === 'review' => 'FN',
             default => 'FN',
         };
+    }
+
+    private function profileResultType(string $actual, string $predicted, ?string $actualProfileKey, ?string $predictedProfileKey): string
+    {
+        if ($actual === 'normal') {
+            return in_array($predicted, ['attack', 'review'], true) ? 'FP' : 'TN';
+        }
+
+        if ($predicted !== 'attack') {
+            return 'FN';
+        }
+
+        return $actualProfileKey !== null && $actualProfileKey === $predictedProfileKey ? 'TP' : 'PM';
     }
 
     private function profileLabel(string $key, array $profiles): string

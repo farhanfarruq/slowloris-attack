@@ -13,6 +13,12 @@ class DashboardController extends Controller
 {
     public function index()
     {
+        $detectedLabels = collect(config('tool_profiles.profiles', []))
+            ->pluck('detected_label')
+            ->filter()
+            ->values()
+            ->all();
+
         $stats = [
             'total_acquisition'   => AcquisitionFile::count(),
             'total_validation'    => ValidationFile::count(),
@@ -22,9 +28,9 @@ class DashboardController extends Controller
                 ->sum('long_lived_connections'),
             // Rata-rata semua confidence AI (semua kelas, bukan khusus Slowloris).
             'avg_ai_confidence_all'  => round((float) AiResult::where('is_simulated', false)->avg('confidence_score'), 2),
-            // Rata-rata confidence khusus klasifikasi "Slowloris Detected".
+            // Rata-rata confidence khusus klasifikasi detected untuk semua tool profile.
             'avg_ai_confidence_attack' => round((float) AiResult::where('is_simulated', false)
-                ->where('classification', 'Slowloris Detected')
+                ->whereIn('classification', $detectedLabels)
                 ->avg('confidence_score'), 2),
             'experiment_total'    => Experiment::count(),
             'experiment_status'   => Experiment::select('experiment_status', DB::raw('count(*) as total'))

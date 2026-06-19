@@ -10,9 +10,10 @@
         'slowloris_lab' => 'slowloris lab (legacy)',
         'mixed' => 'mixed',
     ];
+    $truthLabels = $trafficLabels;
 
     foreach ($toolProfiles as $profile) {
-        $trafficLabels[$profile['key']] = $profile['label'];
+        $truthLabels[$profile['key']] = $profile['label'];
     }
 @endphp
 <div class="card max-w-3xl">
@@ -75,7 +76,7 @@
             <label class="label-field">Ground Truth Label</label>
             <select name="ground_truth_label" class="input-field">
                 <option value="">—</option>
-                @foreach ($trafficLabels as $key => $label)
+                @foreach ($truthLabels as $key => $label)
                     <option value="{{ $key }}" @selected(old('ground_truth_label', $experiment->ground_truth_label) === $key)>{{ $label }}</option>
                 @endforeach
             </select>

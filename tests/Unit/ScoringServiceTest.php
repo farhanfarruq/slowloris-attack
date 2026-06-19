@@ -276,6 +276,195 @@ class ScoringServiceTest extends TestCase
         $this->assertSame('Suspicious', $eval['attack_category']);
     }
 
+    public function test_hoic_http_flood_profile_can_reach_attack_detected_with_matching_evidence(): void
+    {
+        $experiment = $this->fakeExperiment(scenarioKey: 'http-flood-lab', groundTruth: 'mixed');
+        $experiment->forceFill([
+            'tool_profile' => 'hoic',
+            'attack_pattern' => 'http_flood',
+        ]);
+
+        $features = $this->baseFeatures([
+            'total_packets' => 15000,
+            'tcp_packets' => 14000,
+            'http_packets' => 13000,
+            'total_connections' => 1000,
+            'connections_to_http_port' => 900,
+            'throughput_kbps' => 4000,
+            'high_severity_alerts' => 25,
+            'medium_severity_alerts' => 10,
+            'total_alerts' => 35,
+        ]);
+
+        $radar = $this->scoring->computeRadarScores($features, 'hoic');
+        $eval = $this->scoring->evaluateExperiment($experiment, $features, $radar, 'hoic');
+
+        $this->assertSame('attack_detected', $eval['experiment_status']);
+        $this->assertSame('Strong HOIC Indication', $eval['attack_category']);
+    }
+
+    public function test_hoic_profile_blocks_short_http_burst_false_positive(): void
+    {
+        $experiment = $this->fakeExperiment(scenarioKey: 'http-burst', groundTruth: 'normal');
+        $experiment->forceFill([
+            'tool_profile' => 'hoic',
+            'attack_pattern' => 'http_flood',
+        ]);
+
+        $features = $this->baseFeatures([
+            'total_packets' => 6000,
+            'tcp_packets' => 5800,
+            'http_packets' => 5500,
+            'total_connections' => 700,
+            'connections_to_http_port' => 650,
+            'throughput_kbps' => 3000,
+            'medium_severity_alerts' => 5,
+            'total_alerts' => 5,
+        ]);
+
+        $radar = $this->scoring->computeRadarScores($features, 'hoic');
+        $eval = $this->scoring->evaluateExperiment($experiment, $features, $radar, 'hoic');
+
+        $this->assertNotSame('attack_detected', $eval['experiment_status']);
+        $this->assertSame('Suspicious', $eval['attack_category']);
+    }
+
+    public function test_hping3_udp_flood_profile_can_reach_attack_detected_with_matching_evidence(): void
+    {
+        $experiment = $this->fakeExperiment(scenarioKey: 'udp-flood-lab', groundTruth: 'mixed');
+        $experiment->forceFill([
+            'tool_profile' => 'hping3',
+            'attack_pattern' => 'udp_flood',
+        ]);
+
+        $features = $this->baseFeatures([
+            'total_packets' => 20000,
+            'tcp_packets' => 1000,
+            'udp_packets' => 18000,
+            'icmp_packets' => 500,
+            'http_packets' => 0,
+            'total_connections' => 1200,
+            'throughput_kbps' => 5000,
+            'high_severity_alerts' => 30,
+            'medium_severity_alerts' => 10,
+            'total_alerts' => 40,
+        ]);
+
+        $radar = $this->scoring->computeRadarScores($features, 'hping3');
+        $eval = $this->scoring->evaluateExperiment($experiment, $features, $radar, 'hping3');
+
+        $this->assertSame('attack_detected', $eval['experiment_status']);
+        $this->assertSame('Strong Hping3 Indication', $eval['attack_category']);
+    }
+
+    public function test_torshammer_slow_http_profile_can_reach_attack_detected_with_matching_evidence(): void
+    {
+        $experiment = $this->fakeExperiment(scenarioKey: 'slow-http-lab', groundTruth: 'mixed');
+        $experiment->forceFill([
+            'tool_profile' => 'torshammer',
+            'attack_pattern' => 'slow_http',
+        ]);
+
+        $features = $this->baseFeatures([
+            'total_packets' => 9000,
+            'tcp_packets' => 8500,
+            'http_packets' => 7000,
+            'total_connections' => 700,
+            'connections_to_http_port' => 650,
+            'avg_connection_duration' => 180,
+            'long_lived_connections' => 300,
+            'half_open_connections' => 500,
+            'throughput_kbps' => 5,
+            'high_severity_alerts' => 25,
+            'medium_severity_alerts' => 10,
+            'total_alerts' => 35,
+        ]);
+
+        $radar = $this->scoring->computeRadarScores($features, 'torshammer');
+        $eval = $this->scoring->evaluateExperiment($experiment, $features, $radar, 'torshammer');
+
+        $this->assertSame('attack_detected', $eval['experiment_status']);
+        $this->assertSame('Strong Torshammer Indication', $eval['attack_category']);
+    }
+
+    public function test_torshammer_profile_blocks_normal_http_false_positive(): void
+    {
+        $experiment = $this->fakeExperiment(scenarioKey: 'normal-baseline', groundTruth: 'normal');
+        $experiment->forceFill([
+            'tool_profile' => 'torshammer',
+            'attack_pattern' => 'slow_http',
+        ]);
+
+        $features = $this->baseFeatures([
+            'total_packets' => 300,
+            'tcp_packets' => 250,
+            'http_packets' => 200,
+            'total_connections' => 10,
+            'connections_to_http_port' => 8,
+            'avg_connection_duration' => 1,
+            'throughput_kbps' => 100,
+        ]);
+
+        $radar = $this->scoring->computeRadarScores($features, 'torshammer');
+        $eval = $this->scoring->evaluateExperiment($experiment, $features, $radar, 'torshammer');
+
+        $this->assertSame('normal', $eval['experiment_status']);
+        $this->assertSame('Normal', $eval['attack_category']);
+    }
+
+    public function test_xerxes_http_flood_profile_can_reach_attack_detected_with_matching_evidence(): void
+    {
+        $experiment = $this->fakeExperiment(scenarioKey: 'http-flood-lab', groundTruth: 'mixed');
+        $experiment->forceFill([
+            'tool_profile' => 'xerxes',
+            'attack_pattern' => 'http_flood',
+        ]);
+
+        $features = $this->baseFeatures([
+            'total_packets' => 18000,
+            'tcp_packets' => 17000,
+            'http_packets' => 12000,
+            'total_connections' => 1500,
+            'connections_to_http_port' => 1200,
+            'throughput_kbps' => 6000,
+            'high_severity_alerts' => 30,
+            'medium_severity_alerts' => 10,
+            'total_alerts' => 40,
+        ]);
+
+        $radar = $this->scoring->computeRadarScores($features, 'xerxes');
+        $eval = $this->scoring->evaluateExperiment($experiment, $features, $radar, 'xerxes');
+
+        $this->assertSame('attack_detected', $eval['experiment_status']);
+        $this->assertSame('Strong Xerxes Indication', $eval['attack_category']);
+    }
+
+    public function test_xerxes_profile_blocks_normal_baseline_false_positive(): void
+    {
+        $experiment = $this->fakeExperiment(scenarioKey: 'normal-baseline', groundTruth: 'normal');
+        $experiment->forceFill([
+            'tool_profile' => 'xerxes',
+            'attack_pattern' => 'http_flood',
+        ]);
+
+        $features = $this->baseFeatures([
+            'total_packets' => 6000,
+            'tcp_packets' => 5800,
+            'http_packets' => 5000,
+            'total_connections' => 600,
+            'connections_to_http_port' => 550,
+            'throughput_kbps' => 3000,
+            'medium_severity_alerts' => 5,
+            'total_alerts' => 5,
+        ]);
+
+        $radar = $this->scoring->computeRadarScores($features, 'xerxes');
+        $eval = $this->scoring->evaluateExperiment($experiment, $features, $radar, 'xerxes');
+
+        $this->assertNotSame('attack_detected', $eval['experiment_status']);
+        $this->assertSame('Suspicious', $eval['attack_category']);
+    }
+
     private function fakeExperiment(string $scenarioKey, string $groundTruth): Experiment
     {
         $experiment = new Experiment();
@@ -293,6 +482,8 @@ class ScoringServiceTest extends TestCase
         return array_merge([
             'total_packets'             => 0,
             'tcp_packets'               => 0,
+            'udp_packets'               => 0,
+            'icmp_packets'              => 0,
             'http_packets'              => 0,
             'avg_packet_size'           => 0,
             'duration_seconds'          => 60,

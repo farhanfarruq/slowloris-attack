@@ -17,7 +17,10 @@ class AiPromptBuilderTest extends TestCase
 
         $this->assertStringContainsString('payload.tool_profile: loic', $prompt['system']);
         $this->assertStringContainsString('LOIC Detected', $prompt['system']);
-        $this->assertStringContainsString('Do not reuse indicators from another tool profile', $prompt['system']);
+        $this->assertStringContainsString('Jangan memakai ulang indikator dari tool profile lain', $prompt['system']);
+        $this->assertStringContainsString('seluruh teks naratif di dalam JSON harus berbahasa Indonesia', $prompt['user']);
+        $this->assertStringContainsString('Analisis perilaku flood berupa volume paket atau request yang tinggi', $prompt['system']);
+        $this->assertStringNotContainsString('Do not reuse indicators from another tool profile', $prompt['system']);
         $this->assertStringNotContainsString('Slowloris Detected, Inconclusive', $prompt['system']);
     }
 }

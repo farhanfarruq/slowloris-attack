@@ -50,6 +50,8 @@ class AcquisitionParser
         $lengthSum = 0;
         $lengthCount = 0;
         $tcp = 0;
+        $udp = 0;
+        $icmp = 0;
         $http = 0;
 
         try {
@@ -82,6 +84,12 @@ class AcquisitionParser
                 if (str_contains($proto, 'TCP')) {
                     $tcp++;
                 }
+                if (str_contains($proto, 'UDP')) {
+                    $udp++;
+                }
+                if (str_contains($proto, 'ICMP')) {
+                    $icmp++;
+                }
                 if (str_contains($proto, 'HTTP')) {
                     $http++;
                 }
@@ -109,6 +117,8 @@ class AcquisitionParser
             'parsed_summary'       => [
                 'parser'  => 'csv-stream',
                 'columns' => $columns,
+                'udp_packets' => $udp,
+                'icmp_packets' => $icmp,
             ],
         ];
     }
@@ -152,6 +162,8 @@ class AcquisitionParser
                     'throughput_kbps' => $cs['throughput_kbps'] ?? null,
                     'long_lived_connections' => $cs['long_lived_connections'] ?? null,
                     'connections_to_http_port' => $cs['connections_to_http_port'] ?? null,
+                    'udp_packets' => $ps['udp_packets'] ?? null,
+                    'icmp_packets' => $ps['icmp_packets'] ?? null,
                 ],
             ];
         }
