@@ -26,7 +26,7 @@ return new class extends Migration
             $table->enum('experiment_status', [
                 'normal', 'suspicious', 'attack_detected', 'inconclusive', 'pending'
             ])->default('pending');
-            $table->string('ground_truth_label')->nullable(); // normal | slowloris_lab | mixed | unknown
+            $table->string('ground_truth_label')->nullable(); // normal | profile key | mixed | unknown | legacy slowloris_lab
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->timestamps();
         });

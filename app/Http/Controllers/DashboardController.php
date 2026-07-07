@@ -18,6 +18,9 @@ class DashboardController extends Controller
             ->filter()
             ->values()
             ->all();
+        $toolProfileLabels = collect(config('tool_profiles.profiles', []))
+            ->mapWithKeys(fn (array $profile, string $key) => [$key => $profile['label'] ?? strtoupper($key)])
+            ->all();
 
         $stats = [
             'total_acquisition'   => AcquisitionFile::count(),
@@ -51,6 +54,6 @@ class DashboardController extends Controller
             })
             ->map->count();
 
-        return view('dashboard', compact('stats', 'recentExperiments', 'finalDecisionSummary'));
+        return view('dashboard', compact('stats', 'recentExperiments', 'finalDecisionSummary', 'toolProfileLabels'));
     }
 }

@@ -9,10 +9,10 @@
     $scoreTone = fn (?string $category) => \App\Support\AttackPresentation::scoreTone($category);
     $scoreLabel = fn (?string $category) => \App\Support\AttackPresentation::scoreLabel($category);
     $trafficLabels = [
-        'normal' => 'normal',
-        'slowloris_lab' => 'slowloris lab (legacy)',
-        'mixed' => 'mixed',
-        'unknown' => 'unknown',
+        'unknown' => 'Belum Ditentukan',
+        'normal' => 'Normal Baseline',
+        'mixed' => 'Attack/Mixed Lab',
+        'slowloris_lab' => 'Data Lama',
     ];
 
 @endphp
@@ -23,8 +23,9 @@
             <input type="text" name="search" value="{{ request('search') }}"
                    placeholder="Cari kode atau nama eksperimen..." class="input-field max-w-sm">
             <select name="traffic_type" class="input-field max-w-xs">
-                <option value="">Semua tipe traffic</option>
+                <option value="">Semua kelas traffic</option>
                 @foreach ($trafficLabels as $key => $label)
+                    @continue($key === 'slowloris_lab' && request('traffic_type') !== 'slowloris_lab')
                     <option value="{{ $key }}" @selected(request('traffic_type')===$key)>{{ $label }}</option>
                 @endforeach
             </select>

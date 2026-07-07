@@ -300,6 +300,7 @@ class AiValidationService
                     'api_url' => $setting->api_url,
                     'model' => $setting->model,
                     'tool_profile' => $setting->tool_profile,
+                    'timeout_seconds' => null,
                     'use_live_api' => (bool) $setting->use_live_api,
                 ];
             }
@@ -320,6 +321,7 @@ class AiValidationService
                     'api_url' => $cfg['api_url'] ?? null,
                     'model' => $cfg['model'] ?? null,
                     'tool_profile' => $cfg['tool_profile'] ?? null,
+                    'timeout_seconds' => $cfg['timeout_seconds'] ?? $cfg['timeout'] ?? null,
                     'use_live_api' => false,
                 ];
             }
@@ -335,6 +337,7 @@ class AiValidationService
                 $providers[$key]['api_url'] = $setting->api_url ?: ($providers[$key]['api_url'] ?? null);
                 $providers[$key]['model'] = $setting->model ?: ($providers[$key]['model'] ?? null);
                 $providers[$key]['tool_profile'] = $setting->tool_profile ?: ($providers[$key]['tool_profile'] ?? null);
+                $providers[$key]['timeout_seconds'] = $providers[$key]['timeout_seconds'] ?? null;
                 $providers[$key]['use_live_api'] = (bool) $setting->use_live_api;
             }
         } catch (\Throwable $e) {
@@ -356,18 +359,27 @@ class AiValidationService
     {
         $prompt = $this->buildPrompt($payload);
         $url = $this->openAiCompatibleEndpoint($config['api_url'] ?? null);
+        $timeout = $this->requestTimeoutSeconds($config, 120);
 
-        $resp = Http::timeout(45)
-            ->withToken($config['api_key'])
-            ->post($url, [
-                'model' => $config['model'],
-                'response_format' => ['type' => 'json_object'],
-                'temperature' => 0.2,
-                'messages' => [
-                    ['role' => 'system', 'content' => $prompt['system']],
-                    ['role' => 'user', 'content' => $prompt['user']],
-                ],
-            ]);
+        try {
+            $resp = Http::timeout($timeout)
+                ->connectTimeout(15)
+                ->withToken($config['api_key'])
+                ->post($url, [
+                    'model' => $config['model'],
+                    'response_format' => ['type' => 'json_object'],
+                    'temperature' => 0.2,
+                    'messages' => [
+                        ['role' => 'system', 'content' => $prompt['system']],
+                        ['role' => 'user', 'content' => $prompt['user']],
+                    ],
+                ]);
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            throw new \RuntimeException(
+                'Provider tidak merespons dalam ' . $timeout . ' detik. Coba jalankan ulang, gunakan model yang lebih ringan, atau naikkan timeout provider bila endpoint sedang lambat.',
+                previous: $e
+            );
+        }
 
         $resp->throw();
         $content = $resp->json('choices.0.message.content', '{}');
@@ -380,8 +392,9 @@ class AiValidationService
     {
         $prompt = $this->buildPrompt($payload);
         $url = $this->geminiEndpoint($config);
+        $timeout = $this->requestTimeoutSeconds($config, 90);
 
-        $resp = Http::timeout(45)->post($url, [
+        $resp = Http::timeout($timeout)->connectTimeout(15)->post($url, [
             'systemInstruction' => ['parts' => [['text' => $prompt['system']]]],
             'contents' => [
                 ['role' => 'user', 'parts' => [['text' => $prompt['user']]]],
@@ -410,6 +423,21 @@ class AiValidationService
         }
 
         return $url . '/chat/completions';
+    }
+
+    private function requestTimeoutSeconds(array $config, int $default): int
+    {
+        $configured = $config['timeout_seconds'] ?? $config['timeout'] ?? null;
+        if (is_numeric($configured)) {
+            return max(15, min(300, (int) $configured));
+        }
+
+        $apiUrl = strtolower((string) ($config['api_url'] ?? ''));
+        if (str_contains($apiUrl, 'integrate.api.nvidia.com')) {
+            return max($default, 180);
+        }
+
+        return $default;
     }
 
     private function geminiEndpoint(array $config): string

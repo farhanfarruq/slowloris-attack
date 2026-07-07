@@ -11,6 +11,7 @@ use App\Models\SnortAlert;
 use App\Models\User;
 use App\Models\ValidationFile;
 use App\Services\AcquisitionParser;
+use App\Services\EvaluationMetricsService;
 use App\Services\ValidationParser;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -114,8 +115,8 @@ Artisan::command('lab:import-local-captures {--force : Replace imported records 
         [
             'key' => 'slow-http',
             'name' => 'Slow HTTP Headers - VM Wireshark Snort',
-            'traffic_type' => 'slowloris_lab',
-            'ground_truth_label' => 'slowloris_lab',
+            'traffic_type' => 'mixed',
+            'ground_truth_label' => 'slowloris',
             'duration' => 100,
             'pcap' => 'slow-http-wireshark.pcapng',
             'snort' => 'slow-http-snort.log',
@@ -341,6 +342,49 @@ Artisan::command('acquisition:reparse {id? : Acquisition file id}', function (Ac
 
     $this->info("Selesai reparse: {$count} file.");
 })->purpose('Re-parse uploaded acquisition files with the current parser');
+
+Artisan::command('lab:evaluate-profiles {--json : Output raw JSON for reports}', function (EvaluationMetricsService $evaluation) {
+    $summary = $evaluation->summary();
+
+    if ($this->option('json')) {
+        $this->line(json_encode([
+            'coverage' => $summary['coverage'],
+            'profileAware' => $summary['metrics'],
+            'binary' => $summary['binaryMetrics'],
+            'profileMetrics' => $summary['profileMetrics'],
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+
+        return self::SUCCESS;
+    }
+
+    $this->info('Profile-aware metrics');
+    $this->table(['Metric', 'Value'], [
+        ['Accuracy', $summary['metrics']['accuracy'] . '%'],
+        ['Precision', $summary['metrics']['precision'] . '%'],
+        ['Recall', $summary['metrics']['recall'] . '%'],
+        ['F1', $summary['metrics']['f1'] . '%'],
+        ['Samples', $summary['metrics']['total']],
+        ['Profile mismatch', $summary['metrics']['pm']],
+    ]);
+
+    $this->table(
+        ['Profile', 'Sample', 'TP', 'TN', 'FP', 'FN', 'PM', 'Precision', 'Recall', 'F1'],
+        collect($summary['profileMetrics'])->map(fn (array $profile) => [
+            $profile['label'],
+            $profile['total'],
+            $profile['tp'],
+            $profile['tn'],
+            $profile['fp'],
+            $profile['fn'],
+            $profile['pm'],
+            $profile['precision'] . '%',
+            $profile['recall'] . '%',
+            $profile['f1'] . '%',
+        ])->all()
+    );
+
+    return self::SUCCESS;
+})->purpose('Calculate precision, recall, and F1 per tool profile from local experiments');
 
 if (!function_exists('nextExperimentCode')) {
     function nextExperimentCode(): string

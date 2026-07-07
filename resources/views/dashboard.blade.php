@@ -16,11 +16,12 @@
     $scoreTone = fn (?string $category) => \App\Support\AttackPresentation::scoreTone($category);
     $scoreLabel = fn (?string $category) => \App\Support\AttackPresentation::scoreLabel($category);
     $trafficLabels = [
-        'normal' => 'normal',
-        'slowloris_lab' => 'attack lab',
-        'mixed' => 'mixed',
-        'unknown' => 'unknown',
+        'unknown' => 'Belum Ditentukan',
+        'normal' => 'Normal Baseline',
+        'mixed' => 'Attack/Mixed Lab',
+        'slowloris_lab' => 'Data Lama',
     ];
+    $groundTruthLabels = array_merge($trafficLabels, $toolProfileLabels ?? []);
 @endphp
 
 <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
@@ -116,7 +117,9 @@
                     <th>Kode</th>
                     <th>Nama</th>
                     <th>Tanggal</th>
-                    <th>Tipe Traffic</th>
+                    <th>Tool Profile</th>
+                    <th>Traffic Class</th>
+                    <th>Ground Truth</th>
                     <th>Skor Akhir</th>
                     <th>Status</th>
                     <th>Confidence Jawaban AI</th>
@@ -125,11 +128,24 @@
             </thead>
             <tbody>
                 @forelse ($recentExperiments as $exp)
-                    <tr class="hover:bg-slate-800/40">
-                        <td class="font-mono text-cyan-300">{{ $exp->experiment_code }}</td>
-                        <td class="text-slate-200">{{ $exp->name }}</td>
-                        <td class="text-slate-400">{{ $exp->experiment_date?->format('d M Y') }}</td>
-                        <td><span class="badge-cyan">{{ $trafficLabels[$exp->traffic_type] ?? str_replace('_', ' ', $exp->traffic_type) }}</span></td>
+	                    <tr class="hover:bg-slate-800/40">
+	                        <td class="font-mono text-cyan-300">{{ $exp->experiment_code }}</td>
+	                        <td class="text-slate-200">{{ $exp->name }}</td>
+	                        <td class="text-slate-400">{{ $exp->experiment_date?->format('d M Y') }}</td>
+	                        <td>
+                                <span class="badge-cyan">{{ $toolProfileLabels[$exp->tool_profile ?? ''] ?? strtoupper($exp->tool_profile ?: '—') }}</span>
+                                @if($exp->attack_pattern)
+                                    <p class="text-[11px] text-slate-500 font-mono mt-1">{{ $exp->attack_pattern }}</p>
+                                @endif
+                            </td>
+	                        <td><span class="badge-slate">{{ $trafficLabels[$exp->traffic_type] ?? str_replace('_', ' ', (string) $exp->traffic_type) }}</span></td>
+                            <td>
+                                @php
+                                    $truth = $exp->ground_truth_label ?: 'unknown';
+                                    $truthLabel = $groundTruthLabels[$truth] ?? str_replace('_', ' ', $truth);
+                                @endphp
+                                <span class="{{ $truth === 'unknown' ? 'badge-slate' : 'badge-cyan' }}">{{ $truthLabel }}</span>
+                            </td>
                         <td>
                             @if ($exp->extractedFeature)
                                 <span class="score-pill {{ $scoreTone($exp->extractedFeature->attack_category) }}">
@@ -147,7 +163,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="8" class="text-center py-8 text-slate-500">Belum ada eksperimen.</td></tr>
+	                    <tr><td colspan="10" class="text-center py-8 text-slate-500">Belum ada eksperimen.</td></tr>
                 @endforelse
             </tbody>
         </table>

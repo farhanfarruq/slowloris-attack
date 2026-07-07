@@ -7,10 +7,9 @@
 
 @php
     $trafficLabels = [
-        'unknown' => 'Unknown',
-        'normal' => 'Normal',
-        'slowloris_lab' => 'Slowloris Lab (legacy)',
-        'mixed' => 'Mixed',
+        'unknown' => 'Belum Ditentukan',
+        'normal' => 'Normal Baseline',
+        'mixed' => 'Attack/Mixed Lab',
     ];
     $truthLabels = $trafficLabels;
 
@@ -32,12 +31,13 @@
             <input name="experiment_date" type="date" required value="{{ now()->toDateString() }}" class="input-field">
         </div>
         <div>
-            <label class="label-field">Tipe Traffic *</label>
+            <label class="label-field">Kelas Traffic *</label>
             <select name="traffic_type" class="input-field" required>
                 @foreach ($trafficLabels as $key => $label)
                     <option value="{{ $key }}" @selected(old('traffic_type', 'unknown') === $key)>{{ $label }}</option>
                 @endforeach
             </select>
+            <p class="text-xs text-slate-500 mt-1">Kategori kasar dataset. Identitas tool utama tetap di Tool Profile.</p>
         </div>
         <div>
             <label class="label-field">Tool Profile *</label>

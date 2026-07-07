@@ -125,6 +125,32 @@ class AiValidationServiceTest extends TestCase
         $this->assertSame('Inconclusive', $result['classification']);
     }
 
+    public function test_nvidia_openai_compatible_endpoint_gets_longer_timeout(): void
+    {
+        $method = $this->privateMethod('requestTimeoutSeconds');
+
+        $timeout = $method->invoke($this->service(), [
+            'api_url' => 'https://integrate.api.nvidia.com/v1/chat/completions',
+        ], 120);
+
+        $this->assertSame(180, $timeout);
+    }
+
+    public function test_provider_timeout_can_be_configured_and_clamped(): void
+    {
+        $method = $this->privateMethod('requestTimeoutSeconds');
+
+        $this->assertSame(240, $method->invoke($this->service(), [
+            'api_url' => 'https://example.test/v1',
+            'timeout_seconds' => 240,
+        ], 120));
+
+        $this->assertSame(300, $method->invoke($this->service(), [
+            'api_url' => 'https://example.test/v1',
+            'timeout_seconds' => 999,
+        ], 120));
+    }
+
     private function service(): AiValidationService
     {
         return new AiValidationService(new AnalysisService(new ScoringService()));

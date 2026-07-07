@@ -5,12 +5,19 @@
 @section('content')
 @php
     $trafficLabels = [
-        'unknown' => 'unknown',
-        'normal' => 'normal',
-        'slowloris_lab' => 'slowloris lab (legacy)',
-        'mixed' => 'mixed',
+        'unknown' => 'Belum Ditentukan',
+        'normal' => 'Normal Baseline',
+        'mixed' => 'Attack/Mixed Lab',
     ];
     $truthLabels = $trafficLabels;
+
+    if (old('traffic_type', $experiment->traffic_type) === 'slowloris_lab') {
+        $trafficLabels['slowloris_lab'] = 'Data Lama';
+    }
+
+    if (old('ground_truth_label', $experiment->ground_truth_label) === 'slowloris_lab') {
+        $truthLabels['slowloris_lab'] = 'Data Lama';
+    }
 
     foreach ($toolProfiles as $profile) {
         $truthLabels[$profile['key']] = $profile['label'];
@@ -30,12 +37,13 @@
                    value="{{ old('experiment_date', $experiment->experiment_date?->toDateString()) }}">
         </div>
         <div>
-            <label class="label-field">Tipe Traffic *</label>
+            <label class="label-field">Kelas Traffic *</label>
             <select name="traffic_type" class="input-field" required>
                 @foreach ($trafficLabels as $key => $label)
                     <option value="{{ $key }}" @selected(old('traffic_type', $experiment->traffic_type) === $key)>{{ $label }}</option>
                 @endforeach
             </select>
+            <p class="text-xs text-slate-500 mt-1">Kategori kasar dataset. Identitas tool utama tetap di Tool Profile.</p>
         </div>
         <div>
             <label class="label-field">Tool Profile *</label>

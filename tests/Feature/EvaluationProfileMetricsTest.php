@@ -6,6 +6,7 @@ use App\Models\Experiment;
 use App\Models\ExtractedFeature;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Tests\TestCase;
 
 class EvaluationProfileMetricsTest extends TestCase
@@ -52,5 +53,41 @@ class EvaluationProfileMetricsTest extends TestCase
             ->assertSee('Profile Mismatch')
             ->assertSee('PM')
             ->assertSee('0<span class="text-base">%</span>', false);
+    }
+
+    public function test_local_profile_evaluation_command_outputs_json_metrics(): void
+    {
+        $user = User::factory()->create();
+
+        Experiment::create([
+            'experiment_code' => 'EVAL-CLI-001',
+            'name' => 'LOIC ground truth analyzed as Hping3',
+            'experiment_date' => now()->toDateString(),
+            'network_interface' => 'eth0',
+            'target_ip' => '10.0.0.10',
+            'source_ip' => '10.0.0.2',
+            'capture_duration' => 60,
+            'scenario_key' => 'http-flood-lab',
+            'traffic_type' => 'mixed',
+            'status' => 'completed',
+            'experiment_status' => 'attack_detected',
+            'ground_truth_label' => 'loic',
+            'tool_profile' => 'hping3',
+            'attack_pattern' => 'tcp_syn_flood',
+            'analysis_profile_key' => 'hping3',
+            'target_platform' => 'vm_ubuntu_server',
+            'user_id' => $user->id,
+        ]);
+
+        $this->assertSame(0, Artisan::call('lab:evaluate-profiles', ['--json' => true]));
+
+        $output = Artisan::output();
+
+        $this->assertStringContainsString('"profileAware"', $output);
+        $this->assertStringContainsString('"pm": 1', $output);
+        $this->assertStringContainsString('"key": "loic"', $output);
+        $this->assertStringContainsString('"fn": 1', $output);
+        $this->assertStringContainsString('"key": "hping3"', $output);
+        $this->assertStringContainsString('"fp": 1', $output);
     }
 }
