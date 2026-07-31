@@ -5,6 +5,12 @@
 
 @section('content')
 
+<div class="flex flex-wrap justify-end gap-2 mb-4">
+    <a class="btn-ghost text-xs" href="{{ route('evaluation.export', 'json') }}">Export JSON</a>
+    <a class="btn-ghost text-xs" href="{{ route('evaluation.export', 'csv') }}">Export CSV</a>
+    <a class="btn-ghost text-xs" href="{{ route('evaluation.export', 'md') }}">Export Markdown</a>
+</div>
+
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
     <div class="stat-card">
         <p class="text-xs text-slate-400 uppercase tracking-wider">Profile Accuracy</p>
@@ -38,7 +44,7 @@
     </div>
 </div>
 
-<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+	<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
     <div class="stat-card">
         <p class="text-xs text-slate-400 uppercase tracking-wider">Total Eksperimen</p>
         <p class="mt-2 text-2xl font-semibold">{{ $coverage['total_experiments'] }}</p>
@@ -58,10 +64,251 @@
         <p class="text-xs text-slate-400 uppercase tracking-wider">Ground Truth Belum Siap</p>
         <p class="mt-2 text-2xl font-semibold">{{ $coverage['missing_ground_truth'] }}</p>
         <p class="text-[11px] text-slate-500 mt-1">Kosong atau unknown</p>
-    </div>
-</div>
+	    </div>
+	</div>
 
-<div class="card mb-4">
+	<div class="card mb-4">
+	    <div class="card-header"><p class="card-title">Dataset Coverage Per Profile</p></div>
+	    <div class="overflow-x-auto">
+	        <table class="table-stripe">
+	            <thead>
+	                <tr>
+	                    <th>Profile</th>
+	                    <th>Status</th>
+	                    <th>Attack</th>
+	                    <th>Normal</th>
+	                    <th>Guard</th>
+	                    <th>Ready</th>
+	                    <th>Review</th>
+	                    <th>Incomplete</th>
+	                    <th>Gap</th>
+	                </tr>
+	            </thead>
+	            <tbody>
+	                @foreach ($datasetCoverage as $profile)
+	                    @php
+	                        $coverageColor = match ($profile['status']) {
+	                            'Ready' => 'emerald',
+	                            'Needs Review' => 'amber',
+	                            default => 'rose',
+	                        };
+	                    @endphp
+	                    <tr>
+	                        <td class="font-semibold">{{ $profile['label'] }}</td>
+	                        <td><span class="badge bg-{{ $coverageColor }}-500/15 text-{{ $coverageColor }}-300 border-{{ $coverageColor }}-500/30">{{ $profile['status'] }}</span></td>
+	                        <td class="font-mono">{{ $profile['attack_samples'] }}</td>
+	                        <td class="font-mono">{{ $profile['normal_samples'] }}</td>
+	                        <td class="font-mono">{{ $profile['false_positive_guard_samples'] }}</td>
+	                        <td class="font-mono">{{ $profile['ready_for_evaluation'] }}</td>
+	                        <td class="font-mono">{{ $profile['needs_review'] }}</td>
+	                        <td class="font-mono">{{ $profile['incomplete'] }}</td>
+	                        <td class="text-xs text-slate-500">{{ $profile['missing_evidence'] ? implode(', ', array_slice($profile['missing_evidence'], 0, 3)) : '-' }}</td>
+	                    </tr>
+	                @endforeach
+	            </tbody>
+	        </table>
+	    </div>
+	</div>
+
+		<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+	    <div class="card">
+	        <div class="card-header"><p class="card-title">False Positive Guard</p></div>
+	        <div class="overflow-x-auto">
+	            <table class="table-stripe">
+	                <thead>
+	                    <tr>
+	                        <th>Kategori</th>
+	                        <th>Total</th>
+	                        <th>TN</th>
+	                        <th>Review</th>
+	                        <th>FP</th>
+	                        <th>FPR</th>
+	                    </tr>
+	                </thead>
+	                <tbody>
+	                    @foreach ($falsePositiveGuards as $guard)
+	                        <tr>
+	                            <td class="font-semibold">{{ $guard['label'] }}</td>
+	                            <td class="font-mono">{{ $guard['total'] }}</td>
+	                            <td class="font-mono">{{ $guard['tn'] }}</td>
+	                            <td class="font-mono">{{ $guard['review'] }}</td>
+	                            <td class="font-mono">{{ $guard['fp'] }}</td>
+	                            <td class="font-mono">{{ $guard['false_positive_rate'] }}%</td>
+	                        </tr>
+	                    @endforeach
+	                </tbody>
+	            </table>
+	        </div>
+	    </div>
+
+	    <div class="card">
+	        <div class="card-header"><p class="card-title">AI Disagreement Queue</p></div>
+	        <div class="overflow-x-auto">
+	            <table class="table-stripe">
+	                <thead>
+	                    <tr>
+	                        <th>Eksperimen</th>
+	                        <th>Kategori</th>
+	                        <th>Logic</th>
+	                        <th>AI</th>
+	                        <th>Confidence</th>
+	                    </tr>
+	                </thead>
+	                <tbody>
+	                    @forelse ($aiDisagreements as $row)
+	                        <tr>
+	                            <td>
+	                                <a class="text-cyan-300" href="{{ route('experiments.show', $row['experiment']) }}">{{ $row['experiment']->experiment_code }}</a>
+	                                <p class="text-[11px] text-slate-500">{{ $row['model'] }}</p>
+	                            </td>
+	                            <td class="text-slate-300">{{ $row['category'] }}</td>
+	                            <td class="font-mono">{{ $row['logic'] }}</td>
+	                            <td class="font-mono">{{ $row['classification'] }}</td>
+	                            <td class="font-mono">{{ $row['confidence'] }}%</td>
+	                        </tr>
+	                    @empty
+	                        <tr><td colspan="5" class="text-center py-6 text-slate-500">Belum ada perbedaan logic dan AI.</td></tr>
+	                    @endforelse
+	                </tbody>
+	            </table>
+	        </div>
+		    </div>
+		</div>
+
+		<div class="card mb-4">
+		    <div class="card-header">
+		        <p class="card-title">Profile Calibration Review</p>
+		        <div class="flex gap-2">
+		            <a class="text-xs text-cyan-300" href="{{ route('evaluation.calibration.export', array_merge(request()->query(), ['format' => 'md'])) }}">Export MD</a>
+		            <a class="text-xs text-emerald-300" href="{{ route('evaluation.calibration.export', array_merge(request()->query(), ['format' => 'json'])) }}">Export JSON</a>
+		        </div>
+		    </div>
+		    <div class="p-5">
+		        <form method="GET" action="{{ route('evaluation.index') }}" class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+		            <div>
+		                <label class="block text-xs text-slate-500 mb-1">Profile</label>
+		                <select name="calibration_profile" class="input-field">
+		                    @foreach ($calibrationProfiles as $profile)
+		                        <option value="{{ $profile['key'] }}" @selected($calibrationResult['profile'] === $profile['key'])>{{ $profile['label'] }}</option>
+		                    @endforeach
+		                </select>
+		            </div>
+		            <div>
+		                <label class="block text-xs text-slate-500 mb-1">Detected Threshold</label>
+		                <input name="detected" type="number" min="0" max="100" step="1" class="input-field" value="{{ $calibrationResult['detected_threshold'] }}">
+		            </div>
+		            <div>
+		                <label class="block text-xs text-slate-500 mb-1">Suspicious Threshold</label>
+		                <input name="suspicious" type="number" min="0" max="100" step="1" class="input-field" value="{{ $calibrationResult['suspicious_threshold'] }}">
+		            </div>
+		            <button class="btn-primary text-xs">Simulasikan</button>
+		        </form>
+
+		        @auth
+		            @if(auth()->user()->isAdmin())
+		                <form method="POST" action="{{ route('evaluation.calibration.snapshots.store') }}" class="mt-3">
+		                    @csrf
+		                    <input type="hidden" name="calibration_profile" value="{{ $calibrationResult['profile'] }}">
+		                    <input type="hidden" name="detected" value="{{ $calibrationResult['detected_threshold'] }}">
+		                    <input type="hidden" name="suspicious" value="{{ $calibrationResult['suspicious_threshold'] }}">
+		                    <button class="btn-success text-xs">Simpan Snapshot</button>
+		                </form>
+		            @endif
+		        @endauth
+
+		        <div class="grid grid-cols-2 md:grid-cols-6 gap-3 mt-5 text-sm">
+		            <div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+		                <p class="text-xs text-slate-500">Sample</p>
+		                <p class="text-xl font-semibold">{{ $calibrationResult['metrics']['total'] }}</p>
+		            </div>
+		            <div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+		                <p class="text-xs text-slate-500">Accuracy</p>
+		                <p class="text-xl font-semibold">{{ $calibrationResult['metrics']['accuracy'] }}%</p>
+		            </div>
+		            <div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+		                <p class="text-xs text-slate-500">Precision</p>
+		                <p class="text-xl font-semibold">{{ $calibrationResult['metrics']['precision'] }}%</p>
+		            </div>
+		            <div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+		                <p class="text-xs text-slate-500">Recall</p>
+		                <p class="text-xl font-semibold">{{ $calibrationResult['metrics']['recall'] }}%</p>
+		            </div>
+		            <div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+		                <p class="text-xs text-slate-500">F1</p>
+		                <p class="text-xl font-semibold">{{ $calibrationResult['metrics']['f1'] }}%</p>
+		            </div>
+		            <div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+		                <p class="text-xs text-slate-500">Changed</p>
+		                <p class="text-xl font-semibold">{{ count($calibrationResult['changed']) }}</p>
+		            </div>
+		        </div>
+
+		        <p class="text-[11px] text-slate-500 mt-3">Simulasi ini tidak mengubah status eksperimen asli.</p>
+
+		        @if($calibrationResult['changed'])
+		            <div class="overflow-x-auto mt-4">
+		                <table class="table-stripe">
+		                    <thead>
+		                        <tr>
+		                            <th>Kode</th>
+		                            <th>Score</th>
+		                            <th>Status Sekarang</th>
+		                            <th>Simulasi</th>
+		                            <th>Type</th>
+		                        </tr>
+		                    </thead>
+		                    <tbody>
+		                        @foreach (array_slice($calibrationResult['changed'], 0, 10) as $row)
+		                            <tr>
+		                                <td class="font-mono text-cyan-300">{{ $row['code'] }}</td>
+		                                <td class="font-mono">{{ $row['score'] }}</td>
+		                                <td class="font-mono">{{ $row['current'] }}</td>
+		                                <td class="font-mono">{{ $row['simulated'] }}</td>
+		                                <td class="font-mono">{{ $row['type'] }}</td>
+		                            </tr>
+		                        @endforeach
+		                    </tbody>
+		                </table>
+		            </div>
+		        @endif
+
+		        @if($calibrationSnapshots->isNotEmpty())
+		            <div class="mt-5">
+		                <p class="text-sm font-semibold text-slate-200 mb-2">Snapshot Terakhir</p>
+		                <div class="overflow-x-auto">
+		                    <table class="table-stripe">
+		                        <thead>
+		                            <tr>
+		                                <th>Waktu</th>
+		                                <th>Profile</th>
+		                                <th>Detected</th>
+		                                <th>Suspicious</th>
+		                                <th>F1</th>
+		                                <th>Changed</th>
+		                                <th>User</th>
+		                            </tr>
+		                        </thead>
+		                        <tbody>
+		                            @foreach($calibrationSnapshots as $snapshot)
+		                                <tr>
+		                                    <td class="text-xs text-slate-500">{{ $snapshot->created_at->format('d M Y H:i') }}</td>
+		                                    <td class="font-mono">{{ $snapshot->tool_profile }}</td>
+		                                    <td class="font-mono">{{ $snapshot->detected_threshold }}</td>
+		                                    <td class="font-mono">{{ $snapshot->suspicious_threshold }}</td>
+		                                    <td class="font-mono">{{ $snapshot->metrics['f1'] ?? 0 }}%</td>
+		                                    <td class="font-mono">{{ count($snapshot->changed_rows ?? []) }}</td>
+		                                    <td class="text-slate-300">{{ $snapshot->user?->name ?? '-' }}</td>
+		                                </tr>
+		                            @endforeach
+		                        </tbody>
+		                    </table>
+		                </div>
+		            </div>
+		        @endif
+		    </div>
+		</div>
+		
+		<div class="card mb-4">
     <div class="card-header"><p class="card-title">Arti Kode Evaluasi</p></div>
     <div class="p-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 text-sm">
         <div class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
@@ -180,10 +427,11 @@
                     <th>Profile</th>
                     <th>Ground Truth</th>
                     <th>Prediksi Sistem</th>
-                    <th>Skor</th>
-                    <th>Binary</th>
-                    <th>Profile</th>
-                </tr>
+	                    <th>Skor</th>
+	                    <th>Quality</th>
+	                    <th>Binary</th>
+	                    <th>Profile</th>
+	                </tr>
             </thead>
             <tbody>
                 @forelse ($rows as $row)
@@ -220,19 +468,32 @@
                             @endif
                         </td>
                         <td class="font-mono">
-                            {{ $row['final_score'] ?? '-' }}
-                            <p class="text-[11px] text-slate-500">{{ $row['category'] }}</p>
-                        </td>
-                        <td>
-                            <span class="badge bg-{{ $binaryColor }}-500/15 text-{{ $binaryColor }}-300 border-{{ $binaryColor }}-500/30">{{ $row['binary_type'] }}</span>
-                        </td>
+	                            {{ $row['final_score'] ?? '-' }}
+	                            <p class="text-[11px] text-slate-500">{{ $row['category'] }}</p>
+	                        </td>
+	                        @php
+	                            $qualityColor = match ($row['quality']['status']) {
+	                                'Ready' => 'emerald',
+	                                'Needs Review' => 'amber',
+	                                default => 'rose',
+	                            };
+	                        @endphp
+	                        <td>
+	                            <span class="badge bg-{{ $qualityColor }}-500/15 text-{{ $qualityColor }}-300 border-{{ $qualityColor }}-500/30">{{ $row['quality']['status'] }}</span>
+	                            @if($row['quality']['reasons'])
+	                                <p class="text-[11px] text-slate-500 mt-1">{{ implode(', ', array_slice($row['quality']['reasons'], 0, 2)) }}</p>
+	                            @endif
+	                        </td>
+	                        <td>
+	                            <span class="badge bg-{{ $binaryColor }}-500/15 text-{{ $binaryColor }}-300 border-{{ $binaryColor }}-500/30">{{ $row['binary_type'] }}</span>
+	                        </td>
                         <td>
                             <span class="badge bg-{{ $color }}-500/15 text-{{ $color }}-300 border-{{ $color }}-500/30">{{ $row['type'] }}</span>
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="8" class="text-center py-6 text-slate-500">Belum ada eksperimen dengan ground truth dan status sistem yang siap dievaluasi.</td></tr>
-                @endforelse
+	                    <tr><td colspan="9" class="text-center py-6 text-slate-500">Belum ada eksperimen dengan ground truth dan status sistem yang siap dievaluasi.</td></tr>
+	                @endforelse
             </tbody>
         </table>
     </div>

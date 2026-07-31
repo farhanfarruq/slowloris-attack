@@ -11,7 +11,11 @@ use App\Models\SnortAlert;
 use App\Models\User;
 use App\Models\ValidationFile;
 use App\Services\AcquisitionParser;
+use App\Services\DatasetCoverageService;
+use App\Services\EvaluationExportService;
 use App\Services\EvaluationMetricsService;
+use App\Services\ExperimentEvidenceService;
+use App\Services\ProfileCalibrationService;
 use App\Services\ValidationParser;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -343,16 +347,32 @@ Artisan::command('acquisition:reparse {id? : Acquisition file id}', function (Ac
     $this->info("Selesai reparse: {$count} file.");
 })->purpose('Re-parse uploaded acquisition files with the current parser');
 
-Artisan::command('lab:evaluate-profiles {--json : Output raw JSON for reports}', function (EvaluationMetricsService $evaluation) {
+Artisan::command('lab:evaluate-profiles {--json : Output raw JSON for reports} {--format= : Export format: json, csv, md} {--output= : Write export to file}', function (
+    EvaluationMetricsService $evaluation,
+    DatasetCoverageService $datasetCoverage,
+    EvaluationExportService $exporter,
+) {
     $summary = $evaluation->summary();
+    $coverage = $datasetCoverage->summary();
+    $format = $this->option('json') ? 'json' : strtolower((string) $this->option('format'));
 
-    if ($this->option('json')) {
-        $this->line(json_encode([
-            'coverage' => $summary['coverage'],
-            'profileAware' => $summary['metrics'],
-            'binary' => $summary['binaryMetrics'],
-            'profileMetrics' => $summary['profileMetrics'],
-        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    if ($format !== '') {
+        if (!in_array($format, ['json', 'csv', 'md', 'markdown'], true)) {
+            $this->error('Format harus json, csv, atau md.');
+            return self::FAILURE;
+        }
+
+        $content = $exporter->make($summary, $coverage, $format);
+        if ($path = $this->option('output')) {
+            $dir = dirname($path);
+            if (!is_dir($dir)) {
+                mkdir($dir, 0775, true);
+            }
+            file_put_contents($path, $content);
+            $this->info("Export ditulis: {$path}");
+        } else {
+            $this->line($content);
+        }
 
         return self::SUCCESS;
     }
@@ -383,8 +403,108 @@ Artisan::command('lab:evaluate-profiles {--json : Output raw JSON for reports}',
         ])->all()
     );
 
+    $this->table(
+        ['Profile', 'Coverage', 'Attack', 'Normal', 'Guard', 'Ready', 'Review', 'Incomplete'],
+        collect($coverage)->map(fn (array $profile) => [
+            $profile['label'],
+            $profile['status'],
+            $profile['attack_samples'],
+            $profile['normal_samples'],
+            $profile['false_positive_guard_samples'],
+            $profile['ready_for_evaluation'],
+            $profile['needs_review'],
+            $profile['incomplete'],
+        ])->all()
+    );
+
     return self::SUCCESS;
 })->purpose('Calculate precision, recall, and F1 per tool profile from local experiments');
+
+Artisan::command('lab:evidence-bundle {experiment : Experiment id or code} {--output= : Write bundle to file}', function (
+    ExperimentEvidenceService $evidence,
+) {
+    $key = (string) $this->argument('experiment');
+    $experiment = Experiment::query()
+        ->whereKey($key)
+        ->orWhere('experiment_code', $key)
+        ->first();
+
+    if (!$experiment) {
+        $this->error("Experiment tidak ditemukan: {$key}");
+        return self::FAILURE;
+    }
+
+    $content = $evidence->markdown($experiment);
+    $path = $this->option('output') ?: storage_path('app/reports/evidence-bundles/' . $experiment->experiment_code . '.md');
+    $dir = dirname($path);
+    if (!is_dir($dir)) {
+        mkdir($dir, 0775, true);
+    }
+
+    file_put_contents($path, $content);
+    $this->info("Evidence bundle ditulis: {$path}");
+
+    return self::SUCCESS;
+})->purpose('Export an audit-friendly evidence bundle for one experiment');
+
+Artisan::command('lab:calibrate-profile {profile : Tool profile key} {--detected=76 : Simulated detected threshold} {--suspicious=56 : Simulated suspicious threshold} {--format= : Export format: json or md} {--output= : Write snapshot to file}', function (
+    ProfileCalibrationService $calibration,
+) {
+    $result = $calibration->simulate(
+        (string) $this->argument('profile'),
+        (float) $this->option('detected'),
+        (float) $this->option('suspicious'),
+    );
+
+    $format = strtolower((string) $this->option('format'));
+    if ($format !== '') {
+        if (!in_array($format, ['json', 'md'], true)) {
+            $this->error('Format harus json atau md.');
+            return self::FAILURE;
+        }
+
+        $content = $calibration->export($result, $format);
+        if ($path = $this->option('output')) {
+            $dir = dirname($path);
+            if (!is_dir($dir)) {
+                mkdir($dir, 0775, true);
+            }
+            file_put_contents($path, $content);
+            $this->info("Calibration snapshot ditulis: {$path}");
+        } else {
+            $this->line($content);
+        }
+
+        return self::SUCCESS;
+    }
+
+    $this->info('Calibration simulation only. Data asli tidak diubah.');
+    $this->table(['Metric', 'Value'], [
+        ['Profile', $result['profile']],
+        ['Detected threshold', $result['detected_threshold']],
+        ['Suspicious threshold', $result['suspicious_threshold']],
+        ['Accuracy', $result['metrics']['accuracy'] . '%'],
+        ['Precision', $result['metrics']['precision'] . '%'],
+        ['Recall', $result['metrics']['recall'] . '%'],
+        ['F1', $result['metrics']['f1'] . '%'],
+        ['Changed rows', count($result['changed'])],
+    ]);
+
+    if ($result['changed']) {
+        $this->table(
+            ['Code', 'Score', 'Current', 'Simulated', 'Type'],
+            collect($result['changed'])->map(fn (array $row) => [
+                $row['code'],
+                $row['score'],
+                $row['current'],
+                $row['simulated'],
+                $row['type'],
+            ])->all()
+        );
+    }
+
+    return self::SUCCESS;
+})->purpose('Simulate profile thresholds without changing stored experiment results');
 
 if (!function_exists('nextExperimentCode')) {
     function nextExperimentCode(): string

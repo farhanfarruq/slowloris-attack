@@ -22,13 +22,14 @@
     <div class="card xl:col-span-2">
         <div class="card-header">
             <p class="card-title">Metadata Eksperimen</p>
-            @auth
-                @if (auth()->user()->isAdmin())
-                    <div class="flex items-center gap-2">
-                        <a href="{{ route('experiments.edit', $experiment) }}" class="btn-ghost text-xs">Edit</a>
-                        <a href="{{ route('reports.create', $experiment) }}" class="btn-success text-xs">Generate Laporan</a>
-                    </div>
-                @endif
+	            @auth
+	                @if (auth()->user()->isAdmin())
+	                    <div class="flex items-center gap-2">
+	                        <a href="{{ route('experiments.edit', $experiment) }}" class="btn-ghost text-xs">Edit</a>
+	                        <a href="{{ route('experiments.evidence-bundle', $experiment) }}" class="btn-ghost text-xs">Evidence Bundle</a>
+	                        <a href="{{ route('reports.create', $experiment) }}" class="btn-success text-xs">Generate Laporan</a>
+	                    </div>
+	                @endif
             @endauth
         </div>
         <div class="p-5 grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
@@ -108,9 +109,63 @@
             @endif
         </div>
     </div>
-</div>
+	</div>
 
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+	<div class="card mt-4">
+	    <div class="card-header"><p class="card-title">Evidence Drilldown</p></div>
+	    <div class="p-5 grid grid-cols-1 lg:grid-cols-4 gap-4 text-sm">
+	        <div>
+	            <p class="text-xs text-slate-500">Final Decision</p>
+	            <p class="text-slate-200 font-semibold">{{ str_replace('_', ' ', $evidenceSummary['decision']['final_decision'] ?? $experiment->experiment_status) }}</p>
+	            <p class="text-[11px] text-slate-500 mt-1">{{ $evidenceSummary['decision']['logic_classification'] ?? 'logic missing' }}</p>
+	        </div>
+	        <div>
+	            <p class="text-xs text-slate-500">Acquisition Evidence</p>
+	            <p class="text-slate-200">{{ $evidenceSummary['acquisition']['files'] }} file · {{ number_format($evidenceSummary['acquisition']['total_packets']) }} pkt</p>
+	            <p class="text-[11px] text-slate-500 mt-1">HTTP {{ number_format($evidenceSummary['acquisition']['http_packets']) }} · conn {{ number_format($evidenceSummary['acquisition']['connections']) }}</p>
+	        </div>
+	        <div>
+	            <p class="text-xs text-slate-500">Snort Evidence</p>
+	            <p class="text-slate-200">{{ $evidenceSummary['validation']['files'] }} file · {{ number_format($evidenceSummary['validation']['total_alerts']) }} alert</p>
+	            <p class="text-[11px] text-slate-500 mt-1">Severity {{ $evidenceSummary['validation']['highest_severity'] ?? 'missing' }}</p>
+	        </div>
+	        <div>
+	            <p class="text-xs text-slate-500">AI Validation</p>
+	            @if($evidenceSummary['ai'])
+	                <p class="text-slate-200">{{ $evidenceSummary['ai']['classification'] }} · {{ $evidenceSummary['ai']['confidence'] }}%</p>
+	                <p class="text-[11px] text-slate-500 mt-1">{{ $evidenceSummary['ai']['model'] }}</p>
+	            @else
+	                <p class="text-slate-500">Belum ada hasil AI.</p>
+	            @endif
+	        </div>
+	    </div>
+	    <div class="px-5 pb-5 grid grid-cols-1 lg:grid-cols-3 gap-3 text-xs">
+	        <div class="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+	            <p class="font-semibold text-emerald-300 mb-1">Gate Passed</p>
+	            <p class="text-slate-400">{{ $evidenceSummary['gates']['passed'] ? implode(', ', $evidenceSummary['gates']['passed']) : 'none' }}</p>
+	        </div>
+	        <div class="rounded-lg border border-rose-500/20 bg-rose-500/5 p-3">
+	            <p class="font-semibold text-rose-300 mb-1">Gate Failed</p>
+	            <p class="text-slate-400">{{ $evidenceSummary['gates']['failed'] ? implode(', ', $evidenceSummary['gates']['failed']) : 'none' }}</p>
+	        </div>
+	        <div class="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+	            <p class="font-semibold text-amber-300 mb-1">Missing Evidence</p>
+	            <p class="text-slate-400">{{ $evidenceSummary['gates']['missing'] ? implode(', ', $evidenceSummary['gates']['missing']) : 'none' }}</p>
+	        </div>
+	    </div>
+	    @if($evidenceSummary['gates']['reasons'])
+	        <div class="px-5 pb-5 text-xs text-slate-400">
+	            <p class="font-semibold text-slate-300 mb-1">Gate Reasons</p>
+	            <ul class="list-disc list-inside space-y-1">
+	                @foreach(array_slice($evidenceSummary['gates']['reasons'], 0, 4) as $reason)
+	                    <li>{{ is_scalar($reason) ? $reason : json_encode($reason, JSON_UNESCAPED_SLASHES) }}</li>
+	                @endforeach
+	            </ul>
+	        </div>
+	    @endif
+	</div>
+	
+	<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
     <div class="card">
         <div class="card-header">
             <p class="card-title">File Akuisisi ({{ $experiment->acquisitionFiles->count() }})</p>

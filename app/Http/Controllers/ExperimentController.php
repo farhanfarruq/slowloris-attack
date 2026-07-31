@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Experiment;
 use App\Services\AuditService;
+use App\Services\ExperimentEvidenceService;
 use App\Services\ToolProfileService;
 use App\Services\VmLabExperimentTemplateService;
 use Illuminate\Http\Request;
@@ -110,7 +111,7 @@ class ExperimentController extends Controller
             );
     }
 
-    public function show(Experiment $experiment)
+    public function show(Experiment $experiment, ExperimentEvidenceService $evidence)
     {
         $experiment->load([
             'user',
@@ -123,7 +124,18 @@ class ExperimentController extends Controller
             'finalReports',
         ]);
 
-        return view('experiments.show', compact('experiment'));
+        return view('experiments.show', [
+            'experiment' => $experiment,
+            'evidenceSummary' => $evidence->summary($experiment),
+        ]);
+    }
+
+    public function evidenceBundle(Experiment $experiment, ExperimentEvidenceService $evidence)
+    {
+        return response($evidence->markdown($experiment), 200, [
+            'Content-Type' => 'text/markdown',
+            'Content-Disposition' => 'attachment; filename="' . $experiment->experiment_code . '-evidence-bundle.md"',
+        ]);
     }
 
     public function edit(Experiment $experiment)

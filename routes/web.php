@@ -29,6 +29,8 @@ Route::middleware(['auth'])->group(function () {
     // Eksperimen
     Route::post('/experiments/vm-drafts', [ExperimentController::class, 'createVmDrafts'])
         ->middleware('role:admin')->name('experiments.vm-drafts');
+    Route::get('/experiments/{experiment}/evidence-bundle', [ExperimentController::class, 'evidenceBundle'])
+        ->name('experiments.evidence-bundle');
     Route::resource('experiments', ExperimentController::class);
 
     // Akuisisi
@@ -103,6 +105,12 @@ Route::middleware(['auth'])->group(function () {
     // Evaluasi akurasi
     Route::get('/evaluation', [\App\Http\Controllers\EvaluationController::class, 'index'])
         ->name('evaluation.index');
+    Route::get('/evaluation/export/{format}', [\App\Http\Controllers\EvaluationController::class, 'export'])
+        ->name('evaluation.export');
+    Route::get('/evaluation/calibration/export/{format}', [\App\Http\Controllers\EvaluationController::class, 'exportCalibration'])
+        ->name('evaluation.calibration.export');
+    Route::post('/evaluation/calibration/snapshots', [\App\Http\Controllers\EvaluationController::class, 'storeCalibrationSnapshot'])
+        ->middleware('role:admin')->name('evaluation.calibration.snapshots.store');
 
     // Audit log (admin only)
     Route::get('/audit-log', [\App\Http\Controllers\AuditLogController::class, 'index'])

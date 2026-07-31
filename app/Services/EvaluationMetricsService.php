@@ -6,6 +6,11 @@ use App\Models\Experiment;
 
 class EvaluationMetricsService
 {
+    public function __construct(private ?ExperimentQualityService $quality = null)
+    {
+        $this->quality ??= new ExperimentQualityService();
+    }
+
     public function summary(): array
     {
         $profiles = collect(config('tool_profiles.profiles', []))
@@ -17,6 +22,7 @@ class EvaluationMetricsService
             ->all();
 
         $experiments = Experiment::with('extractedFeature')
+            ->withCount(['acquisitionFiles', 'validationFiles'])
             ->whereNotNull('ground_truth_label')
             ->whereIn('experiment_status', ['attack_detected', 'normal', 'suspicious'])
             ->orderBy('experiment_date', 'desc')
@@ -57,6 +63,7 @@ class EvaluationMetricsService
                 'category' => $exp->extractedFeature?->attack_category,
                 'binary_type' => $binaryType,
                 'type' => $profileType,
+                'quality' => $this->quality->evaluate($exp),
             ];
 
             if ($profileType === 'PM') {
