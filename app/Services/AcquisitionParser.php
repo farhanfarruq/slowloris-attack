@@ -23,10 +23,10 @@ class AcquisitionParser
         $extension = strtolower(pathinfo($extension, PATHINFO_EXTENSION) ?: $extension);
 
         return match ($extension) {
-            'csv'             => $this->parseCsv($absolutePath),
-            'json'            => $this->parseJson($absolutePath),
-            'pcap', 'pcapng'  => $this->parsePcap($absolutePath),
-            default           => $this->emptySummary('Unsupported extension: ' . $extension),
+            'csv' => $this->parseCsv($absolutePath),
+            'json' => $this->parseJson($absolutePath),
+            'pcap', 'pcapng' => $this->parsePcap($absolutePath),
+            default => $this->emptySummary('Unsupported extension: '.$extension),
         };
     }
 
@@ -38,7 +38,8 @@ class AcquisitionParser
             $records = $csv->getRecords();
             $columns = $csv->getHeader();
         } catch (\Throwable $e) {
-            Log::warning('CSV parse failed: ' . $e->getMessage());
+            Log::warning('CSV parse failed: '.$e->getMessage());
+
             return $this->emptySummary('CSV tidak dapat dibaca');
         }
 
@@ -71,7 +72,7 @@ class AcquisitionParser
                     $destinations[$dst] = ($destinations[$dst] ?? 0) + 1;
                 }
                 if ($src && $dst) {
-                    $connections[$src . '>' . $dst] = true;
+                    $connections[$src.'>'.$dst] = true;
                 }
                 if ($proto) {
                     $protocols[$proto] = ($protocols[$proto] ?? 0) + 1;
@@ -95,7 +96,8 @@ class AcquisitionParser
                 }
             }
         } catch (\Throwable $e) {
-            Log::warning('CSV stream parse failed: ' . $e->getMessage());
+            Log::warning('CSV stream parse failed: '.$e->getMessage());
+
             return $this->emptySummary('CSV tidak dapat dibaca');
         }
 
@@ -104,18 +106,18 @@ class AcquisitionParser
         arsort($protocols);
 
         return [
-            'total_packets'        => $total,
-            'tcp_packets'          => $tcp,
-            'http_packets'         => $http,
-            'avg_packet_size'      => $lengthCount ? round($lengthSum / $lengthCount, 2) : null,
-            'top_source_ips'       => array_slice($sources, 0, 10, true),
-            'top_destination_ips'  => array_slice($destinations, 0, 10, true),
-            'protocol_distribution'=> $protocols,
-            'total_connections'    => $connections ? count($connections) : null,
+            'total_packets' => $total,
+            'tcp_packets' => $tcp,
+            'http_packets' => $http,
+            'avg_packet_size' => $lengthCount ? round($lengthSum / $lengthCount, 2) : null,
+            'top_source_ips' => array_slice($sources, 0, 10, true),
+            'top_destination_ips' => array_slice($destinations, 0, 10, true),
+            'protocol_distribution' => $protocols,
+            'total_connections' => $connections ? count($connections) : null,
             'avg_connection_duration' => null,
-            'half_open_connections'=> null,
-            'parsed_summary'       => [
-                'parser'  => 'csv-stream',
+            'half_open_connections' => null,
+            'parsed_summary' => [
+                'parser' => 'csv-stream',
                 'columns' => $columns,
                 'udp_packets' => $udp,
                 'icmp_packets' => $icmp,
@@ -136,7 +138,7 @@ class AcquisitionParser
         $contents = file_get_contents($path);
         $data = json_decode((string) $contents, true);
 
-        if (!is_array($data)) {
+        if (! is_array($data)) {
             return $this->emptySummary('JSON tidak valid');
         }
 
@@ -146,18 +148,18 @@ class AcquisitionParser
             $cs = $data['connection_summary'] ?? [];
 
             return [
-                'total_packets'        => $ps['total_packets'] ?? null,
-                'tcp_packets'          => $ps['tcp_packets'] ?? null,
-                'http_packets'         => $ps['http_packets'] ?? null,
-                'avg_packet_size'      => $ps['avg_packet_size'] ?? null,
-                'top_source_ips'       => $data['top_source_ips'] ?? [],
-                'top_destination_ips'  => $data['top_destination_ips'] ?? [],
-                'protocol_distribution'=> $data['protocol_distribution'] ?? [],
-                'total_connections'    => $cs['total_connections'] ?? null,
+                'total_packets' => $ps['total_packets'] ?? null,
+                'tcp_packets' => $ps['tcp_packets'] ?? null,
+                'http_packets' => $ps['http_packets'] ?? null,
+                'avg_packet_size' => $ps['avg_packet_size'] ?? null,
+                'top_source_ips' => $data['top_source_ips'] ?? [],
+                'top_destination_ips' => $data['top_destination_ips'] ?? [],
+                'protocol_distribution' => $data['protocol_distribution'] ?? [],
+                'total_connections' => $cs['total_connections'] ?? null,
                 'avg_connection_duration' => $cs['avg_connection_duration_seconds'] ?? null,
-                'half_open_connections'=> $cs['half_open_connections'] ?? null,
-                'parsed_summary'       => [
-                    'parser'   => 'json-summary',
+                'half_open_connections' => $cs['half_open_connections'] ?? null,
+                'parsed_summary' => [
+                    'parser' => 'json-summary',
                     'duration' => $ps['duration_seconds'] ?? null,
                     'throughput_kbps' => $cs['throughput_kbps'] ?? null,
                     'long_lived_connections' => $cs['long_lived_connections'] ?? null,
@@ -171,18 +173,19 @@ class AcquisitionParser
         // Bila berbentuk array besar dari JSON packet export, gunakan estimasi.
         if (array_is_list($data)) {
             $total = count($data);
+
             return [
-                'total_packets'        => $total,
-                'tcp_packets'          => null,
-                'http_packets'         => null,
-                'avg_packet_size'      => null,
-                'top_source_ips'       => [],
-                'top_destination_ips'  => [],
-                'protocol_distribution'=> [],
-                'total_connections'    => null,
+                'total_packets' => $total,
+                'tcp_packets' => null,
+                'http_packets' => null,
+                'avg_packet_size' => null,
+                'top_source_ips' => [],
+                'top_destination_ips' => [],
+                'protocol_distribution' => [],
+                'total_connections' => null,
                 'avg_connection_duration' => null,
-                'half_open_connections'=> null,
-                'parsed_summary'       => ['parser' => 'json-list', 'count' => $total],
+                'half_open_connections' => null,
+                'parsed_summary' => ['parser' => 'json-list', 'count' => $total],
             ];
         }
 
@@ -196,26 +199,29 @@ class AcquisitionParser
 
         if ($maxAutoParseBytes > 0 && $size > $maxAutoParseBytes) {
             return [
-                'total_packets'        => null,
-                'tcp_packets'          => null,
-                'http_packets'         => null,
-                'avg_packet_size'      => null,
-                'top_source_ips'       => [],
-                'top_destination_ips'  => [],
-                'protocol_distribution'=> [],
-                'total_connections'    => null,
+                'total_packets' => null,
+                'tcp_packets' => null,
+                'http_packets' => null,
+                'avg_packet_size' => null,
+                'top_source_ips' => [],
+                'top_destination_ips' => [],
+                'protocol_distribution' => [],
+                'total_connections' => null,
                 'avg_connection_duration' => null,
-                'half_open_connections'=> null,
-                'parsed_summary'       => [
+                'half_open_connections' => null,
+                'parsed_summary' => [
                     'parser' => 'pcap-large-skip',
-                    'note'   => 'PCAP/PCAPNG besar disimpan tanpa auto parse agar tidak menghabiskan RAM. Upload ringkasan CSV/JSON untuk analisis.',
+                    'note' => 'PCAP/PCAPNG besar disimpan tanpa auto parse agar tidak menghabiskan RAM. Upload ringkasan CSV/JSON untuk analisis.',
                     'size_bytes' => $size,
                     'auto_parse_limit_bytes' => $maxAutoParseBytes,
                 ],
             ];
         }
 
-        $tshark = $this->findExecutable('tshark');
+        $configuredTshark = (string) config('esp32.tshark_binary', '');
+        $tshark = is_file($configuredTshark) && is_executable($configuredTshark)
+            ? $configuredTshark
+            : $this->findExecutable('tshark');
 
         if ($tshark) {
             $summary = $this->parsePcapWithTshark($tshark, $path);
@@ -226,19 +232,19 @@ class AcquisitionParser
         }
 
         return [
-            'total_packets'        => null,
-            'tcp_packets'          => null,
-            'http_packets'         => null,
-            'avg_packet_size'      => null,
-            'top_source_ips'       => [],
-            'top_destination_ips'  => [],
-            'protocol_distribution'=> [],
-            'total_connections'    => null,
+            'total_packets' => null,
+            'tcp_packets' => null,
+            'http_packets' => null,
+            'avg_packet_size' => null,
+            'top_source_ips' => [],
+            'top_destination_ips' => [],
+            'protocol_distribution' => [],
+            'total_connections' => null,
             'avg_connection_duration' => null,
-            'half_open_connections'=> null,
-            'parsed_summary'       => [
+            'half_open_connections' => null,
+            'parsed_summary' => [
                 'parser' => 'fallback',
-                'note'   => 'Helper parser PCAP tidak tersedia atau gagal. Upload juga ringkasan JSON/CSV agar parsing lengkap.',
+                'note' => 'Helper parser PCAP tidak tersedia atau gagal. Upload juga ringkasan JSON/CSV agar parsing lengkap.',
                 'size_bytes' => filesize($path) ?: null,
             ],
         ];
@@ -252,6 +258,7 @@ class AcquisitionParser
             '-T', 'fields',
             '-E', "separator=\t",
             '-E', 'occurrence=f',
+            '-e', 'frame.number',
             '-e', 'frame.len',
             '-e', 'frame.time_epoch',
             '-e', 'frame.protocols',
@@ -262,6 +269,10 @@ class AcquisitionParser
             '-e', 'tcp.dstport',
             '-e', 'tcp.flags.fin',
             '-e', 'tcp.flags.reset',
+            '-e', 'http.request.method',
+            '-e', 'http.request.uri',
+            '-e', 'http.response.code',
+            '-e', 'ip.proto',
         ];
 
         $process = @proc_open($command, [
@@ -270,7 +281,7 @@ class AcquisitionParser
             2 => ['file', '/dev/null', 'w'],
         ], $pipes);
 
-        if (!is_resource($process)) {
+        if (! is_resource($process)) {
             return null;
         }
 
@@ -278,6 +289,8 @@ class AcquisitionParser
 
         $total = 0;
         $tcp = 0;
+        $udp = 0;
+        $icmp = 0;
         $http = 0;
         $lengthSum = 0;
         $lengthCount = 0;
@@ -285,6 +298,7 @@ class AcquisitionParser
         $destinations = [];
         $protocols = [];
         $streams = [];
+        $httpEvents = [];
 
         try {
             while (($line = fgets($pipes[1])) !== false) {
@@ -294,8 +308,8 @@ class AcquisitionParser
                     continue;
                 }
 
-                [$len, $timeEpoch, $protoStack, $src, $dst, $stream, $srcPort, $dstPort, $tcpFin, $tcpReset] =
-                    array_pad(explode("\t", $line), 10, '');
+                [$frameNumber, $len, $timeEpoch, $protoStack, $src, $dst, $stream, $srcPort, $dstPort, $tcpFin, $tcpReset, $httpMethod, $httpUri, $httpStatus, $ipProtocol] =
+                    array_pad(explode("\t", $line), 15, '');
 
                 $total++;
                 $length = (int) $len;
@@ -308,6 +322,14 @@ class AcquisitionParser
                 if (str_contains($protoStack, 'tcp')) {
                     $tcp++;
                     $protocols['TCP'] = ($protocols['TCP'] ?? 0) + 1;
+                }
+                if (str_contains($protoStack, 'udp') || $ipProtocol === '17') {
+                    $udp++;
+                    $protocols['UDP'] = ($protocols['UDP'] ?? 0) + 1;
+                }
+                if (str_contains($protoStack, 'icmp') || $ipProtocol === '1') {
+                    $icmp++;
+                    $protocols['ICMP'] = ($protocols['ICMP'] ?? 0) + 1;
                 }
 
                 if (str_contains($protoStack, 'http') || $srcPort === '80' || $dstPort === '80') {
@@ -322,7 +344,7 @@ class AcquisitionParser
                     $destinations[$dst] = ($destinations[$dst] ?? 0) + 1;
                 }
                 if ($stream !== '') {
-                    if (!isset($streams[$stream])) {
+                    if (! isset($streams[$stream])) {
                         $streams[$stream] = [
                             'first' => null,
                             'last' => null,
@@ -349,6 +371,20 @@ class AcquisitionParser
                         $streams[$stream]['closed'] = true;
                     }
                 }
+
+                if (($httpMethod !== '' || $httpStatus !== '') && count($httpEvents) < 1000) {
+                    $httpEvents[] = [
+                        'frame_number' => $frameNumber !== '' ? (int) $frameNumber : null,
+                        'timestamp' => is_numeric($timeEpoch) ? (float) $timeEpoch : null,
+                        'source_ip' => $src ?: null,
+                        'destination_ip' => $dst ?: null,
+                        'tcp_source_port' => $srcPort !== '' ? (int) $srcPort : null,
+                        'tcp_destination_port' => $dstPort !== '' ? (int) $dstPort : null,
+                        'http_method' => $httpMethod ?: null,
+                        'http_uri' => $httpUri ?: null,
+                        'http_response_status' => $httpStatus !== '' ? (int) $httpStatus : null,
+                    ];
+                }
             }
         } finally {
             fclose($pipes[1]);
@@ -360,7 +396,7 @@ class AcquisitionParser
         }
 
         $parserWarning = ($exitCode ?? 0) !== 0
-            ? 'tshark exit code ' . $exitCode . '; summary dibuat dari packet yang masih dapat dibaca.'
+            ? 'tshark exit code '.$exitCode.'; summary dibuat dari packet yang masih dapat dibaca.'
             : null;
 
         arsort($sources);
@@ -376,7 +412,7 @@ class AcquisitionParser
             if ($stream['http_port']) {
                 $connectionsToHttpPort++;
 
-                if (!$stream['closed']) {
+                if (! $stream['closed']) {
                     $openHttpConnections++;
                 }
             }
@@ -400,24 +436,27 @@ class AcquisitionParser
             : null;
 
         return [
-            'total_packets'        => $total,
-            'tcp_packets'          => $tcp,
-            'http_packets'         => $http,
-            'avg_packet_size'      => $lengthCount ? round($lengthSum / $lengthCount, 2) : null,
-            'top_source_ips'       => array_slice($sources, 0, 10, true),
-            'top_destination_ips'  => array_slice($destinations, 0, 10, true),
-            'protocol_distribution'=> $protocols,
-            'total_connections'    => count($streams) ?: null,
+            'total_packets' => $total,
+            'tcp_packets' => $tcp,
+            'http_packets' => $http,
+            'avg_packet_size' => $lengthCount ? round($lengthSum / $lengthCount, 2) : null,
+            'top_source_ips' => array_slice($sources, 0, 10, true),
+            'top_destination_ips' => array_slice($destinations, 0, 10, true),
+            'protocol_distribution' => $protocols,
+            'total_connections' => count($streams) ?: null,
             'avg_connection_duration' => $avgConnectionDuration,
-            'half_open_connections'=> $openHttpConnections ?: null,
-            'parsed_summary'       => [
+            'half_open_connections' => $openHttpConnections ?: null,
+            'parsed_summary' => [
                 'parser' => 'tshark-fields-stream',
-                'note'   => 'HTTP dihitung dari decoded HTTP atau TCP port 80.',
+                'note' => 'HTTP dihitung dari decoded HTTP atau TCP port 80.',
                 'duration' => $durationSeconds,
                 'throughput_kbps' => $throughputKbps,
                 'long_lived_connections' => $longLivedConnections,
                 'connections_to_http_port' => $connectionsToHttpPort,
                 'open_http_connections' => $openHttpConnections,
+                'udp_packets' => $udp,
+                'icmp_packets' => $icmp,
+                'http_events' => $httpEvents,
                 'warning' => $parserWarning,
             ],
         ];
@@ -425,31 +464,30 @@ class AcquisitionParser
 
     private function findExecutable(string $binary): ?string
     {
-        $output = [];
-        $code = 1;
-        @exec('command -v ' . escapeshellarg($binary) . ' 2>/dev/null', $output, $code);
-
-        if ($code !== 0 || empty($output[0])) {
-            return null;
+        foreach (explode(PATH_SEPARATOR, (string) getenv('PATH')) as $directory) {
+            $candidate = rtrim($directory, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.$binary;
+            if (is_file($candidate) && is_executable($candidate)) {
+                return $candidate;
+            }
         }
 
-        return trim($output[0]);
+        return null;
     }
 
     private function emptySummary(string $note): array
     {
         return [
-            'total_packets'        => null,
-            'tcp_packets'          => null,
-            'http_packets'         => null,
-            'avg_packet_size'      => null,
-            'top_source_ips'       => [],
-            'top_destination_ips'  => [],
-            'protocol_distribution'=> [],
-            'total_connections'    => null,
+            'total_packets' => null,
+            'tcp_packets' => null,
+            'http_packets' => null,
+            'avg_packet_size' => null,
+            'top_source_ips' => [],
+            'top_destination_ips' => [],
+            'protocol_distribution' => [],
+            'total_connections' => null,
             'avg_connection_duration' => null,
-            'half_open_connections'=> null,
-            'parsed_summary'       => ['note' => $note],
+            'half_open_connections' => null,
+            'parsed_summary' => ['note' => $note],
         ];
     }
 }

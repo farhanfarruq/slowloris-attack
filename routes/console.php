@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\AiResult;
 use App\Models\AcquisitionFile;
+use App\Models\AiResult;
 use App\Models\AuditLog;
 use App\Models\Experiment;
 use App\Models\ExtractedFeature;
@@ -12,23 +12,94 @@ use App\Models\User;
 use App\Models\ValidationFile;
 use App\Services\AcquisitionParser;
 use App\Services\DatasetCoverageService;
+use App\Services\Esp32ArtifactImporter;
+use App\Services\Esp32LabRunner;
+use App\Services\Esp32TargetService;
 use App\Services\EvaluationExportService;
 use App\Services\EvaluationMetricsService;
 use App\Services\ExperimentEvidenceService;
 use App\Services\ProfileCalibrationService;
 use App\Services\ValidationParser;
 use Illuminate\Foundation\Inspiring;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Carbon;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+Artisan::command('esp32:readiness {--json : Print structured JSON}', function (Esp32TargetService $target) {
+    try {
+        $result = $target->readiness();
+    } catch (RuntimeException $e) {
+        $this->error($e->getMessage());
+
+        return self::FAILURE;
+    }
+
+    if ($this->option('json')) {
+        $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    } else {
+        $this->info('ESP32_READY');
+        $this->table(['Field', 'Value'], [
+            ['Target', $result['target']['host'].':'.$result['target']['port']],
+            ['Capture interface', $result['target']['capture_interface']],
+            ['Uptime', $result['metrics']['uptime_seconds'].' s'],
+            ['Free heap', $result['metrics']['free_heap_bytes'].' bytes'],
+            ['Min free heap', $result['metrics']['min_free_heap_bytes'].' bytes'],
+            ['Request count', $result['metrics']['request_count']],
+            ['Reset reason', $result['metrics']['reset_reason']],
+        ]);
+    }
+
+    return self::SUCCESS;
+})->purpose('Safely validate the configured ESP32 lab target without scanning');
+
+Artisan::command('esp32:capture {experiment_code : Existing ESP32 experiment code} {--duration=60 : Capture window in seconds}', function (Esp32LabRunner $runner) {
+    $this->warn('Capture defensif saja. Perintah ini tidak menghasilkan traffic serangan.');
+    $this->line('Gunakan terminal terpisah hanya untuk workflow lab yang sudah diotorisasi.');
+
+    try {
+        $result = $runner->run(
+            (string) $this->argument('experiment_code'),
+            (int) $this->option('duration'),
+        );
+    } catch (Throwable $e) {
+        $this->error($e->getMessage());
+
+        return self::FAILURE;
+    }
+
+    $this->info('Capture, TShark, dan Snort selesai.');
+    $this->line('Metadata: '.$result['metadata_file']);
+    $this->line('Packets: '.($result['packet_count'] ?? 'unknown'));
+    $this->line('Alerts: '.$result['alert_count']);
+
+    return self::SUCCESS;
+})->purpose('Capture an authorized ESP32 lab window and write auditable artifacts');
+
+Artisan::command('esp32:import {metadata : Metadata JSON relative to project root}', function (Esp32ArtifactImporter $importer) {
+    try {
+        $result = $importer->import((string) $this->argument('metadata'));
+    } catch (Throwable $e) {
+        $this->error($e->getMessage());
+
+        return self::FAILURE;
+    }
+
+    $experiment = $result['experiment'];
+    $this->info($result['already_imported']
+        ? "Metadata {$experiment->experiment_code} sudah pernah diimpor."
+        : "Artefak {$experiment->experiment_code} berhasil diimpor ke Laravel.");
+
+    return self::SUCCESS;
+})->purpose('Import host-generated ESP32 artifacts without relabeling historical VM records');
+
 Artisan::command('ai:purge-simulated {--force : Run without confirmation}', function () {
-    if (!$this->option('force') && !$this->confirm('Hapus semua hasil AI simulasi/demo?')) {
+    if (! $this->option('force') && ! $this->confirm('Hapus semua hasil AI simulasi/demo?')) {
         $this->warn('Dibatalkan.');
+
         return self::FAILURE;
     }
 
@@ -39,12 +110,14 @@ Artisan::command('ai:purge-simulated {--force : Run without confirmation}', func
         ->delete();
 
     $this->info("Hasil AI simulasi/demo dihapus: {$deleted}");
+
     return self::SUCCESS;
 })->purpose('Remove simulated/demo AI Analysis results');
 
 Artisan::command('ai:purge-failed {--force : Run without confirmation}', function () {
-    if (!$this->option('force') && !$this->confirm('Hapus hasil AI gagal/Inconclusive 0% dari error provider?')) {
+    if (! $this->option('force') && ! $this->confirm('Hapus hasil AI gagal/Inconclusive 0% dari error provider?')) {
         $this->warn('Dibatalkan.');
+
         return self::FAILURE;
     }
 
@@ -55,12 +128,14 @@ Artisan::command('ai:purge-failed {--force : Run without confirmation}', functio
         ->delete();
 
     $this->info("Hasil AI gagal dihapus: {$deleted}");
+
     return self::SUCCESS;
 })->purpose('Remove failed live AI Analysis rows');
 
 Artisan::command('lab:reset-research-data {--force : Run without confirmation}', function () {
-    if (!$this->option('force') && !$this->confirm('Hapus semua data riset: experiment, akuisisi, validasi, alert, fitur, AI, laporan, dan file upload? Akun dan API key tetap disimpan.')) {
+    if (! $this->option('force') && ! $this->confirm('Hapus semua data riset: experiment, akuisisi, validasi, alert, fitur, AI, laporan, dan file upload? Akun dan API key tetap disimpan.')) {
         $this->warn('Dibatalkan.');
+
         return self::FAILURE;
     }
 
@@ -94,6 +169,7 @@ Artisan::command('lab:reset-research-data {--force : Run without confirmation}',
     }
 
     $this->info('Data riset sudah kosong. Buat eksperimen baru dari website.');
+
     return self::SUCCESS;
 })->purpose('Remove all research/demo data while keeping users and AI provider settings');
 
@@ -102,13 +178,14 @@ Artisan::command('lab:import-local-captures {--force : Replace imported records 
     ValidationParser $validationParser,
 ) {
     $admin = User::where('role', User::ROLE_ADMIN)->first() ?? User::first();
-    if (!$admin) {
+    if (! $admin) {
         $this->error('Tidak ada user admin. Jalankan seeder user dulu.');
+
         return self::FAILURE;
     }
 
     $baseDir = Storage::disk('local')->path('vm-lab-captures');
-    if (!is_dir($baseDir)) {
+    if (! is_dir($baseDir)) {
         $baseDir = storage_path('app/vm-lab-captures');
     }
     $sourceIp = '192.168.56.102';
@@ -162,13 +239,14 @@ Artisan::command('lab:import-local-captures {--force : Replace imported records 
 
     foreach ($scenarios as $scenario) {
         $pcapPath = "{$baseDir}/{$scenario['pcap']}";
-        if (!is_file($pcapPath)) {
+        if (! is_file($pcapPath)) {
             $this->warn("Skip {$scenario['key']}: PCAP tidak ditemukan {$scenario['pcap']}");
+
             continue;
         }
 
         $snortPath = $scenario['snort'] ? "{$baseDir}/{$scenario['snort']}" : null;
-        if ($scenario['snort'] && !is_file($snortPath)) {
+        if ($scenario['snort'] && ! is_file($snortPath)) {
             $this->warn("{$scenario['key']}: Snort log tidak ditemukan {$scenario['snort']}. Experiment dibuat akuisisi saja.");
             $snortPath = null;
         }
@@ -179,7 +257,7 @@ Artisan::command('lab:import-local-captures {--force : Replace imported records 
             $experiment = null;
         }
 
-        if (!$experiment) {
+        if (! $experiment) {
             $experiment = Experiment::create([
                 'experiment_code' => nextExperimentCode(),
                 'name' => $scenario['name'],
@@ -197,7 +275,7 @@ Artisan::command('lab:import-local-captures {--force : Replace imported records 
             ]);
         }
 
-        $captureLabel = $scenario['key'] . '-20260529-vm-lab';
+        $captureLabel = $scenario['key'].'-20260529-vm-lab';
         $pcapExt = strtolower(pathinfo($scenario['pcap'], PATHINFO_EXTENSION));
         $pcapStored = "acquisition/{$experiment->id}/imported_{$scenario['pcap']}";
         Storage::disk('local')->put($pcapStored, file_get_contents($pcapPath));
@@ -259,7 +337,7 @@ Artisan::command('lab:import-local-captures {--force : Replace imported records 
                     'rule_set' => 'local lab rules',
                     'monitoring_interface' => $iface,
                     'threshold' => null,
-                    'notes' => 'Diimpor dari storage/app/vm-lab-captures/' . $scenario['snort'],
+                    'notes' => 'Diimpor dari storage/app/vm-lab-captures/'.$scenario['snort'],
                     'total_alerts' => $snortSummary['total_alerts'],
                     'dominant_alert_type' => $snortSummary['dominant_alert_type'],
                     'highest_severity' => $snortSummary['highest_severity'],
@@ -302,13 +380,14 @@ Artisan::command('lab:import-local-captures {--force : Replace imported records 
         }
 
         $experiment->update(['status' => $validation ? 'validated' : 'data_acquired']);
-        $imported[] = "{$experiment->experiment_code} {$scenario['key']}: acq={$acquisition->original_name}, val=" . ($validation?->original_name ?? '-');
+        $imported[] = "{$experiment->experiment_code} {$scenario['key']}: acq={$acquisition->original_name}, val=".($validation?->original_name ?? '-');
     }
 
     foreach ($imported as $line) {
         $this->line($line);
     }
     $this->info('Import selesai.');
+
     return self::SUCCESS;
 })->purpose('Import existing files from storage/app/vm-lab-captures as real experiments');
 
@@ -321,24 +400,25 @@ Artisan::command('acquisition:reparse {id? : Acquisition file id}', function (Ac
     $count = 0;
     foreach ($query->cursor() as $file) {
         $path = Storage::disk('local')->path($file->stored_name);
-        if (!is_file($path)) {
+        if (! is_file($path)) {
             $this->warn("Skip {$file->id}: file tidak ditemukan {$file->stored_name}");
+
             continue;
         }
 
         $summary = $parser->parse($path, $file->extension);
         $file->update([
-            'total_packets'    => $summary['total_packets'],
-            'tcp_packets'      => $summary['tcp_packets'],
-            'http_packets'     => $summary['http_packets'],
-            'avg_packet_size'  => $summary['avg_packet_size'],
-            'top_source_ips'   => $summary['top_source_ips'],
+            'total_packets' => $summary['total_packets'],
+            'tcp_packets' => $summary['tcp_packets'],
+            'http_packets' => $summary['http_packets'],
+            'avg_packet_size' => $summary['avg_packet_size'],
+            'top_source_ips' => $summary['top_source_ips'],
             'top_destination_ips' => $summary['top_destination_ips'],
             'protocol_distribution' => $summary['protocol_distribution'],
             'total_connections' => $summary['total_connections'],
             'avg_connection_duration' => $summary['avg_connection_duration'],
             'half_open_connections' => $summary['half_open_connections'],
-            'parsed_summary'   => $summary['parsed_summary'],
+            'parsed_summary' => $summary['parsed_summary'],
         ]);
         $count++;
         $this->line("Reparsed {$file->id}: {$file->original_name}");
@@ -357,15 +437,16 @@ Artisan::command('lab:evaluate-profiles {--json : Output raw JSON for reports} {
     $format = $this->option('json') ? 'json' : strtolower((string) $this->option('format'));
 
     if ($format !== '') {
-        if (!in_array($format, ['json', 'csv', 'md', 'markdown'], true)) {
+        if (! in_array($format, ['json', 'csv', 'md', 'markdown'], true)) {
             $this->error('Format harus json, csv, atau md.');
+
             return self::FAILURE;
         }
 
         $content = $exporter->make($summary, $coverage, $format);
         if ($path = $this->option('output')) {
             $dir = dirname($path);
-            if (!is_dir($dir)) {
+            if (! is_dir($dir)) {
                 mkdir($dir, 0775, true);
             }
             file_put_contents($path, $content);
@@ -379,10 +460,10 @@ Artisan::command('lab:evaluate-profiles {--json : Output raw JSON for reports} {
 
     $this->info('Profile-aware metrics');
     $this->table(['Metric', 'Value'], [
-        ['Accuracy', $summary['metrics']['accuracy'] . '%'],
-        ['Precision', $summary['metrics']['precision'] . '%'],
-        ['Recall', $summary['metrics']['recall'] . '%'],
-        ['F1', $summary['metrics']['f1'] . '%'],
+        ['Accuracy', $summary['metrics']['accuracy'].'%'],
+        ['Precision', $summary['metrics']['precision'].'%'],
+        ['Recall', $summary['metrics']['recall'].'%'],
+        ['F1', $summary['metrics']['f1'].'%'],
         ['Samples', $summary['metrics']['total']],
         ['Profile mismatch', $summary['metrics']['pm']],
     ]);
@@ -397,9 +478,9 @@ Artisan::command('lab:evaluate-profiles {--json : Output raw JSON for reports} {
             $profile['fp'],
             $profile['fn'],
             $profile['pm'],
-            $profile['precision'] . '%',
-            $profile['recall'] . '%',
-            $profile['f1'] . '%',
+            $profile['precision'].'%',
+            $profile['recall'].'%',
+            $profile['f1'].'%',
         ])->all()
     );
 
@@ -429,15 +510,16 @@ Artisan::command('lab:evidence-bundle {experiment : Experiment id or code} {--ou
         ->orWhere('experiment_code', $key)
         ->first();
 
-    if (!$experiment) {
+    if (! $experiment) {
         $this->error("Experiment tidak ditemukan: {$key}");
+
         return self::FAILURE;
     }
 
     $content = $evidence->markdown($experiment);
-    $path = $this->option('output') ?: storage_path('app/reports/evidence-bundles/' . $experiment->experiment_code . '.md');
+    $path = $this->option('output') ?: storage_path('app/reports/evidence-bundles/'.$experiment->experiment_code.'.md');
     $dir = dirname($path);
-    if (!is_dir($dir)) {
+    if (! is_dir($dir)) {
         mkdir($dir, 0775, true);
     }
 
@@ -458,15 +540,16 @@ Artisan::command('lab:calibrate-profile {profile : Tool profile key} {--detected
 
     $format = strtolower((string) $this->option('format'));
     if ($format !== '') {
-        if (!in_array($format, ['json', 'md'], true)) {
+        if (! in_array($format, ['json', 'md'], true)) {
             $this->error('Format harus json atau md.');
+
             return self::FAILURE;
         }
 
         $content = $calibration->export($result, $format);
         if ($path = $this->option('output')) {
             $dir = dirname($path);
-            if (!is_dir($dir)) {
+            if (! is_dir($dir)) {
                 mkdir($dir, 0775, true);
             }
             file_put_contents($path, $content);
@@ -483,10 +566,10 @@ Artisan::command('lab:calibrate-profile {profile : Tool profile key} {--detected
         ['Profile', $result['profile']],
         ['Detected threshold', $result['detected_threshold']],
         ['Suspicious threshold', $result['suspicious_threshold']],
-        ['Accuracy', $result['metrics']['accuracy'] . '%'],
-        ['Precision', $result['metrics']['precision'] . '%'],
-        ['Recall', $result['metrics']['recall'] . '%'],
-        ['F1', $result['metrics']['f1'] . '%'],
+        ['Accuracy', $result['metrics']['accuracy'].'%'],
+        ['Precision', $result['metrics']['precision'].'%'],
+        ['Recall', $result['metrics']['recall'].'%'],
+        ['F1', $result['metrics']['f1'].'%'],
         ['Changed rows', count($result['changed'])],
     ]);
 
@@ -506,13 +589,13 @@ Artisan::command('lab:calibrate-profile {profile : Tool profile key} {--detected
     return self::SUCCESS;
 })->purpose('Simulate profile thresholds without changing stored experiment results');
 
-if (!function_exists('nextExperimentCode')) {
+if (! function_exists('nextExperimentCode')) {
     function nextExperimentCode(): string
     {
         $max = Experiment::query()
             ->pluck('experiment_code')
             ->map(function (?string $code): int {
-                if (!$code || !preg_match('/^EXP-(\d+)$/', $code, $matches)) {
+                if (! $code || ! preg_match('/^EXP-(\d+)$/', $code, $matches)) {
                     return 0;
                 }
 
@@ -520,6 +603,6 @@ if (!function_exists('nextExperimentCode')) {
             })
             ->max() ?? 0;
 
-        return 'EXP-' . str_pad((string) ($max + 1), 3, '0', STR_PAD_LEFT);
+        return 'EXP-'.str_pad((string) ($max + 1), 3, '0', STR_PAD_LEFT);
     }
 }

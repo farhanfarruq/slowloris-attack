@@ -7,7 +7,7 @@ Dashboard pribadi berbasis Laravel 11 untuk mengelola dataset traffic lab lokal,
 - Database default memakai MySQL.
 - Pengaturan API AI bisa diisi dari halaman web dan disimpan terenkripsi di database.
 - Tampilan memakai tema putih, sederhana, dan bernuansa personal dashboard.
-- Dokumentasi simulasi VM Ubuntu multi-IP tersedia di `docs/simulasi-vm-ubuntu.md`.
+- Target runtime baru adalah ESP32 fisik; dataset VM lama tetap dipertahankan sebagai bukti historis.
 
 ## Stack
 
@@ -59,12 +59,40 @@ Buka `Pengaturan API` sebagai Admin. Isi endpoint, model, API key, dan aktifkan 
 
 Jika live API tidak aktif atau key kosong, sistem memakai heuristik lokal sebagai fallback.
 
-## Simulasi VM Ubuntu
+## ESP32 Physical Target Setup
 
-Panduan lab multi-IP ada di `docs/simulasi-vm-ubuntu.md`. Gunakan hanya pada Host-only/Internal network dan target lokal milik sendiri.
+ESP32 harus menjalankan firmware HTTP dengan endpoint `/`, `/health`, dan `/metrics`. Sambungkan laptop ke SoftAP `ESP32-LAB`; password jaringan tidak disimpan di repository.
+
+Perangkat terverifikasi adalah board generik 30-pin dengan chip `ESP32-D0WD-V3` revision `v3.1`, flash 4 MB, bridge CP2102, Arduino profile `ESP32 Dev Module`, dan Arduino-ESP32 Core 3.3.11.
+
+Konfigurasi default:
+
+```env
+TARGET_TYPE=esp32
+TARGET_HOST=192.168.4.1
+TARGET_PORT=80
+CAPTURE_INTERFACE=wlp8s0
+ESP32_SERIAL_PORT=/dev/ttyUSB0
+```
+
+Periksa target dari host Ubuntu tanpa scanning:
+
+```bash
+php artisan esp32:readiness
+```
+
+Buat draft ESP32 melalui dashboard, lalu jalankan capture defensif menggunakan kode eksperimen tersebut:
+
+```bash
+scripts/esp32-lab/run.sh EXP-001 60
+```
+
+Runner host melakukan readiness, metrics before/after, dumpcap, TShark, Snort offline, hashing, dan import ke Laravel. Runner tidak menghasilkan traffic serangan. Jangan jalankan perintah ini sebelum ESP32 aktif dan laptop tersambung ke `ESP32-LAB`.
+
+Panduan VM lama tetap tersedia hanya untuk reproduksi dataset historis; VM bukan target default baru.
 
 ## Catatan Keamanan
 
-Aplikasi ini tidak menyediakan tombol eksekusi serangan. Fungsinya untuk upload data, ekstraksi fitur, analisis, validasi, dan laporan dari lab lokal.
+Aplikasi ini tidak menyediakan tombol eksekusi serangan. Target otomatis dibatasi oleh allowlist ESP32 lab; domain publik dan pencarian target tidak didukung.
 # slowloris-attack
 # slowloris-attack

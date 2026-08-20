@@ -111,6 +111,29 @@
     </div>
 	</div>
 
+    @if (is_array($experiment->runtime_metadata))
+        <div class="card mt-4">
+            <div class="card-header">
+                <p class="card-title">ESP32 Runtime Metadata</p>
+                <span class="{{ data_get($experiment->runtime_metadata, 'analysis_success') ? 'badge-emerald' : 'badge-amber' }}">
+                    {{ data_get($experiment->runtime_metadata, 'analysis_success') ? 'ANALYSIS SUCCESS' : 'INCOMPLETE' }}
+                </span>
+            </div>
+            <div class="p-5 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div><p class="text-xs text-slate-500">Target</p><p class="font-mono">{{ data_get($experiment->runtime_metadata, 'target_ip', '—') }}:{{ data_get($experiment->runtime_metadata, 'target_port', '—') }}</p></div>
+                <div><p class="text-xs text-slate-500">Packets</p><p>{{ data_get($experiment->runtime_metadata, 'packet_count', '—') }}</p></div>
+                <div><p class="text-xs text-slate-500">Dropped</p><p>{{ data_get($experiment->runtime_metadata, 'dropped_packets', '—') }}</p></div>
+                <div><p class="text-xs text-slate-500">Snort Alerts</p><p>{{ data_get($experiment->runtime_metadata, 'alert_count', '—') }}</p></div>
+                <div><p class="text-xs text-slate-500">Uptime Before</p><p>{{ data_get($experiment->runtime_metadata, 'esp32_metrics_before.uptime_seconds', '—') }} s</p></div>
+                <div><p class="text-xs text-slate-500">Uptime After</p><p>{{ data_get($experiment->runtime_metadata, 'esp32_metrics_after.uptime_seconds', '—') }} s</p></div>
+                <div><p class="text-xs text-slate-500">Free Heap After</p><p>{{ data_get($experiment->runtime_metadata, 'esp32_metrics_after.free_heap_bytes', '—') }}</p></div>
+                <div><p class="text-xs text-slate-500">Reset Reason</p><p>{{ data_get($experiment->runtime_metadata, 'esp32_metrics_after.reset_reason', '—') }}</p></div>
+                <div class="md:col-span-4"><p class="text-xs text-slate-500">PCAP SHA-256</p><p class="font-mono text-xs break-all">{{ data_get($experiment->runtime_metadata, 'pcap_sha256', '—') }}</p></div>
+                <div class="md:col-span-4"><p class="text-xs text-slate-500">Snort Log SHA-256</p><p class="font-mono text-xs break-all">{{ data_get($experiment->runtime_metadata, 'snort_log_sha256', '—') }}</p></div>
+            </div>
+        </div>
+    @endif
+
 	<div class="card mt-4">
 	    <div class="card-header"><p class="card-title">Evidence Drilldown</p></div>
 	    <div class="p-5 grid grid-cols-1 lg:grid-cols-4 gap-4 text-sm">

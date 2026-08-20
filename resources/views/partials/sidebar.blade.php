@@ -10,7 +10,7 @@
         ['route' => 'experiments.index',    'label' => 'Dataset',            'icon' => 'database'],
         ['route' => 'evaluation.index',     'label' => 'Evaluasi',           'icon' => 'check'],
         ['route' => 'reports.index',        'label' => 'Laporan',            'icon' => 'file'],
-        ['route' => 'lab.index',            'label' => 'Lab VM',             'icon' => 'lab'],
+        ['route' => 'lab.index',            'label' => 'Lab ESP32',          'icon' => 'lab'],
         ['route' => 'methodology.index',    'label' => 'Alur Sistem',        'icon' => 'book'],
     ];
 @endphp

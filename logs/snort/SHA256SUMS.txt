@@ -1,0 +1,2 @@
+16563e6fec478446eda6ad1888c5d64e713557bf6f73d1c49ec724a8d36a639b  ../logs/snort/snort_baseline_http_02.log
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ../logs/snort/baseline_alert/alert_fast.txt

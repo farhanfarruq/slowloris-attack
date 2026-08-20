@@ -30,11 +30,13 @@ class Experiment extends Model
         'attack_pattern',
         'analysis_profile_key',
         'target_platform',
+        'runtime_metadata',
         'user_id',
     ];
 
     protected $casts = [
         'experiment_date' => 'date',
+        'runtime_metadata' => 'array',
     ];
 
     public function user(): BelongsTo

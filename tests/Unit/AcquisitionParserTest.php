@@ -15,7 +15,7 @@ class AcquisitionParserTest extends TestCase
         file_put_contents($path, str_repeat('x', (1024 * 1024) + 1));
 
         try {
-            $summary = (new AcquisitionParser())->parse($path, 'pcapng');
+            $summary = (new AcquisitionParser)->parse($path, 'pcapng');
         } finally {
             @unlink($path);
         }
@@ -37,7 +37,7 @@ class AcquisitionParserTest extends TestCase
         ]));
 
         try {
-            $summary = (new AcquisitionParser())->parse($path, 'csv');
+            $summary = (new AcquisitionParser)->parse($path, 'csv');
         } finally {
             @unlink($path);
         }
@@ -73,7 +73,7 @@ class AcquisitionParserTest extends TestCase
         ]));
 
         try {
-            $summary = (new AcquisitionParser())->parse($path, 'json');
+            $summary = (new AcquisitionParser)->parse($path, 'json');
         } finally {
             @unlink($path);
         }
@@ -84,5 +84,23 @@ class AcquisitionParserTest extends TestCase
         $this->assertSame(200, $summary['parsed_summary']['icmp_packets']);
         $this->assertSame(12000, $summary['parsed_summary']['throughput_kbps']);
         $this->assertSame(0, $summary['parsed_summary']['connections_to_http_port']);
+    }
+
+    public function test_baseline_pcap_exposes_auditable_http_events_when_tshark_is_available(): void
+    {
+        $path = base_path('captures/baseline_http_02.pcapng');
+        if (! is_file($path) || trim((string) shell_exec('command -v tshark')) === '') {
+            $this->markTestSkipped('Baseline PCAP atau TShark tidak tersedia.');
+        }
+
+        $summary = (new AcquisitionParser)->parse($path, 'pcapng');
+        $events = $summary['parsed_summary']['http_events'];
+
+        $this->assertSame(34, $summary['total_packets']);
+        $this->assertCount(6, $events);
+        $this->assertSame(3, collect($events)->where('http_method', 'GET')->count());
+        $this->assertSame(3, collect($events)->where('http_response_status', 200)->count());
+        $this->assertNotNull($events[0]['frame_number']);
+        $this->assertNotNull($events[0]['timestamp']);
     }
 }

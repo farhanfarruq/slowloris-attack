@@ -28,7 +28,9 @@ class ExperimentEvidenceService
                 'tool_profile' => $experiment->tool_profile ?: ($raw['tool_profile'] ?? 'slowloris'),
                 'ground_truth' => $experiment->ground_truth_label ?: 'missing',
                 'status' => $experiment->experiment_status,
+                'target_platform' => $experiment->target_platform ?: 'missing',
             ],
+            'runtime' => is_array($experiment->runtime_metadata) ? $experiment->runtime_metadata : null,
             'decision' => [
                 'final_score' => $features?->final_attack_score,
                 'category' => $features?->attack_category,
@@ -68,45 +70,55 @@ class ExperimentEvidenceService
     {
         $data = $this->summary($experiment);
         $lines = [
-            '# Evidence Bundle ' . $data['metadata']['code'],
+            '# Evidence Bundle '.$data['metadata']['code'],
             '',
             '| Field | Value |',
             '|---|---|',
-            '| Name | ' . $data['metadata']['name'] . ' |',
-            '| Tool profile | ' . $data['metadata']['tool_profile'] . ' |',
-            '| Ground truth | ' . $data['metadata']['ground_truth'] . ' |',
-            '| Status | ' . $data['metadata']['status'] . ' |',
-            '| Final score | ' . ($data['decision']['final_score'] ?? 'missing') . ' |',
-            '| Category | ' . ($data['decision']['category'] ?? 'missing') . ' |',
-            '| Final decision | ' . ($data['decision']['final_decision'] ?? 'missing') . ' |',
+            '| Name | '.$data['metadata']['name'].' |',
+            '| Tool profile | '.$data['metadata']['tool_profile'].' |',
+            '| Ground truth | '.$data['metadata']['ground_truth'].' |',
+            '| Target platform | '.$data['metadata']['target_platform'].' |',
+            '| Status | '.$data['metadata']['status'].' |',
+            '| Final score | '.($data['decision']['final_score'] ?? 'missing').' |',
+            '| Category | '.($data['decision']['category'] ?? 'missing').' |',
+            '| Final decision | '.($data['decision']['final_decision'] ?? 'missing').' |',
             '',
             '## Acquisition',
             '',
-            '- Files: ' . $data['acquisition']['files'],
-            '- Total packets: ' . $data['acquisition']['total_packets'],
-            '- TCP packets: ' . $data['acquisition']['tcp_packets'],
-            '- HTTP packets: ' . $data['acquisition']['http_packets'],
-            '- Connections: ' . $data['acquisition']['connections'],
+            '- Files: '.$data['acquisition']['files'],
+            '- Total packets: '.$data['acquisition']['total_packets'],
+            '- TCP packets: '.$data['acquisition']['tcp_packets'],
+            '- HTTP packets: '.$data['acquisition']['http_packets'],
+            '- Connections: '.$data['acquisition']['connections'],
             '',
             '## Validation',
             '',
-            '- Files: ' . $data['validation']['files'],
-            '- Total alerts: ' . $data['validation']['total_alerts'],
-            '- Highest severity: ' . ($data['validation']['highest_severity'] ?? 'missing'),
-            '- Stored alerts: ' . $data['validation']['stored_alerts'],
+            '- Files: '.$data['validation']['files'],
+            '- Total alerts: '.$data['validation']['total_alerts'],
+            '- Highest severity: '.($data['validation']['highest_severity'] ?? 'missing'),
+            '- Stored alerts: '.$data['validation']['stored_alerts'],
+            '',
+            '## ESP32 Runtime Metadata',
+            '',
+            '- PCAP SHA-256: '.($data['runtime']['pcap_sha256'] ?? 'missing'),
+            '- Snort log SHA-256: '.($data['runtime']['snort_log_sha256'] ?? 'missing'),
+            '- Analysis success: '.(($data['runtime']['analysis_success'] ?? false) ? 'true' : 'false'),
+            '- Alert count: '.($data['runtime']['alert_count'] ?? 'missing'),
+            '- Metrics before: '.$this->stringify($data['runtime']['esp32_metrics_before'] ?? null),
+            '- Metrics after: '.$this->stringify($data['runtime']['esp32_metrics_after'] ?? null),
             '',
             '## Evidence Gates',
             '',
-            '- Passed: ' . ($data['gates']['passed'] ? implode(', ', $data['gates']['passed']) : 'none'),
-            '- Failed: ' . ($data['gates']['failed'] ? implode(', ', $data['gates']['failed']) : 'none'),
-            '- Missing: ' . ($data['gates']['missing'] ? implode(', ', $data['gates']['missing']) : 'none'),
+            '- Passed: '.($data['gates']['passed'] ? implode(', ', $data['gates']['passed']) : 'none'),
+            '- Failed: '.($data['gates']['failed'] ? implode(', ', $data['gates']['failed']) : 'none'),
+            '- Missing: '.($data['gates']['missing'] ? implode(', ', $data['gates']['missing']) : 'none'),
             '',
             '## Gate Reasons',
             '',
         ];
 
         foreach ($data['gates']['reasons'] ?: ['none'] as $reason) {
-            $lines[] = '- ' . $this->stringify($reason);
+            $lines[] = '- '.$this->stringify($reason);
         }
 
         $lines[] = '';
@@ -114,15 +126,15 @@ class ExperimentEvidenceService
         $lines[] = '';
 
         if ($data['ai']) {
-            $lines[] = '- Model: ' . $data['ai']['model'];
-            $lines[] = '- Classification: ' . $data['ai']['classification'];
-            $lines[] = '- Confidence: ' . $data['ai']['confidence'] . '%';
-            $lines[] = '- Reason: ' . ($data['ai']['reason'] ?: 'missing');
+            $lines[] = '- Model: '.$data['ai']['model'];
+            $lines[] = '- Classification: '.$data['ai']['classification'];
+            $lines[] = '- Confidence: '.$data['ai']['confidence'].'%';
+            $lines[] = '- Reason: '.($data['ai']['reason'] ?: 'missing');
         } else {
             $lines[] = '- Belum ada hasil AI.';
         }
 
-        return implode("\n", $lines) . "\n";
+        return implode("\n", $lines)."\n";
     }
 
     private function gateNames(array $gates, bool $expected): array
@@ -151,7 +163,7 @@ class ExperimentEvidenceService
     private function stringify(mixed $value): string
     {
         if (is_scalar($value) || $value === null) {
-            return (string) $value;
+            return $value === null ? 'missing' : (string) $value;
         }
 
         return json_encode($value, JSON_UNESCAPED_SLASHES);

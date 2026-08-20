@@ -77,8 +77,9 @@
         </div>
         <div>
             <label class="label-field">Target Platform</label>
-            <input name="target_platform" type="text" class="input-field"
-                   value="{{ old('target_platform', $experiment->target_platform ?: 'vm_ubuntu_server') }}">
+            <input name="target_platform" type="text" readonly class="input-field"
+                   value="{{ $experiment->target_platform ?: 'esp32' }}">
+            <p class="text-[11px] text-slate-500 mt-1">Dikunci untuk menjaga provenance bukti eksperimen.</p>
         </div>
         <div>
             <label class="label-field">Ground Truth Label</label>

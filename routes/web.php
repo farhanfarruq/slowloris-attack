@@ -4,8 +4,10 @@ use App\Http\Controllers\AcquisitionController;
 use App\Http\Controllers\AiValidationController;
 use App\Http\Controllers\AnalysisController;
 use App\Http\Controllers\ApiSettingController;
+use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\ComparisonController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EvaluationController;
 use App\Http\Controllers\ExperimentController;
 use App\Http\Controllers\LabController;
 use App\Http\Controllers\MethodologyController;
@@ -27,8 +29,8 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     // Eksperimen
-    Route::post('/experiments/vm-drafts', [ExperimentController::class, 'createVmDrafts'])
-        ->middleware('role:admin')->name('experiments.vm-drafts');
+    Route::post('/experiments/esp32-drafts', [ExperimentController::class, 'createEsp32Drafts'])
+        ->middleware('role:admin')->name('experiments.esp32-drafts');
     Route::get('/experiments/{experiment}/evidence-bundle', [ExperimentController::class, 'evidenceBundle'])
         ->name('experiments.evidence-bundle');
     Route::resource('experiments', ExperimentController::class);
@@ -103,17 +105,17 @@ Route::middleware(['auth'])->group(function () {
         ->middleware('role:admin')->name('settings.api.destroy');
 
     // Evaluasi akurasi
-    Route::get('/evaluation', [\App\Http\Controllers\EvaluationController::class, 'index'])
+    Route::get('/evaluation', [EvaluationController::class, 'index'])
         ->name('evaluation.index');
-    Route::get('/evaluation/export/{format}', [\App\Http\Controllers\EvaluationController::class, 'export'])
+    Route::get('/evaluation/export/{format}', [EvaluationController::class, 'export'])
         ->name('evaluation.export');
-    Route::get('/evaluation/calibration/export/{format}', [\App\Http\Controllers\EvaluationController::class, 'exportCalibration'])
+    Route::get('/evaluation/calibration/export/{format}', [EvaluationController::class, 'exportCalibration'])
         ->name('evaluation.calibration.export');
-    Route::post('/evaluation/calibration/snapshots', [\App\Http\Controllers\EvaluationController::class, 'storeCalibrationSnapshot'])
+    Route::post('/evaluation/calibration/snapshots', [EvaluationController::class, 'storeCalibrationSnapshot'])
         ->middleware('role:admin')->name('evaluation.calibration.snapshots.store');
 
     // Audit log (admin only)
-    Route::get('/audit-log', [\App\Http\Controllers\AuditLogController::class, 'index'])
+    Route::get('/audit-log', [AuditLogController::class, 'index'])
         ->middleware('role:admin')->name('audit.index');
 });
 

@@ -30,7 +30,7 @@
             <li>Akuisisi data menggunakan Wireshark/dumpcap (.pcap, .pcapng) di interface lab.</li>
             <li>Validasi deteksi menggunakan Snort 3 (mode IDS/IPS) untuk membandingkan rule signature.</li>
             <li>Baseline traffic normal menggunakan iPerf3 dan browsing lokal ke web server lab.</li>
-            <li>Testing defensif dilakukan pada target VM Ubuntu Server di jaringan lab terisolasi.</li>
+            <li>Testing defensif baru menggunakan ESP32 fisik sebagai target HTTP pada jaringan lab terisolasi.</li>
             <li>Tool profile penelitian dipisah: Slowloris, LOIC, HOIC, Hping3, Torshammer, dan Xerxes.</li>
             <li>Ekstraksi fitur traffic & alert ke dalam ringkasan numerik.</li>
             <li>AI Analysis multi-model (Groq, OpenAI-compatible, Gemini, Ollama) sebagai analis pembanding.</li>
@@ -123,51 +123,52 @@
         <div class="card-header"><p class="card-title">Format JSON ke AI</p></div>
         <pre class="p-5 text-xs font-mono text-slate-300 overflow-x-auto bg-slate-950/80 border-t border-slate-800">{{ json_encode([
     'experiment_id' => 'EXP-001',
-    'experiment_name' => 'Attack Profile Lab Test Ubuntu Local',
+    'experiment_name' => 'ESP32 schema example - no measurement',
+    'provenance' => 'schema_example_not_experiment_result',
     'tool_profile' => 'loic',
     'attack_pattern' => 'http_flood',
-    'target_platform' => 'vm_ubuntu_server',
-    'traffic_type' => 'suspected_attack',
+    'target_platform' => 'esp32',
+    'traffic_type' => 'unknown',
     'packet_summary' => [
-        'total_packets' => 18420,
-        'tcp_packets' => 17200,
-        'http_packets' => 8200,
-        'avg_packet_size' => 214,
-        'duration_seconds' => 600,
+        'total_packets' => null,
+        'tcp_packets' => null,
+        'http_packets' => null,
+        'avg_packet_size' => null,
+        'duration_seconds' => null,
     ],
     'connection_summary' => [
-        'total_connections' => 1250,
-        'long_lived_connections' => 870,
-        'avg_connection_duration_seconds' => 145,
-        'connections_to_http_port' => 1180,
-        'throughput_kbps' => 44,
+        'total_connections' => null,
+        'long_lived_connections' => null,
+        'avg_connection_duration_seconds' => null,
+        'connections_to_http_port' => null,
+        'throughput_kbps' => null,
     ],
     'snort_alert_summary' => [
-        'total_alerts' => 96,
-        'high_severity_alerts' => 21,
-        'medium_severity_alerts' => 58,
-        'dominant_alert_type' => 'Possible Slow HTTP DoS Pattern',
+        'total_alerts' => null,
+        'high_severity_alerts' => null,
+        'medium_severity_alerts' => null,
+        'dominant_alert_type' => null,
     ],
     'baseline_summary' => [
-        'normal_avg_connections' => 120,
-        'normal_throughput_kbps' => 950,
-        'normal_alert_count' => 2,
+        'normal_avg_connections' => null,
+        'normal_throughput_kbps' => null,
+        'normal_alert_count' => null,
     ],
     'radar_score' => [
-        'connection_duration_score' => 82,
-        'header_anomaly_score' => 76,
-        'low_bandwidth_high_connection_score' => 88,
-        'snort_alert_score' => 91,
-        'tcp_connection_score' => 79,
-        'baseline_deviation_score' => 85,
+        'connection_duration_score' => null,
+        'header_anomaly_score' => null,
+        'low_bandwidth_high_connection_score' => null,
+        'snort_alert_score' => null,
+        'tcp_connection_score' => null,
+        'baseline_deviation_score' => null,
     ],
     'logic_analysis' => [
-        'classification' => 'Attack Detected',
-        'score' => 88.4,
-        'gate_reasons' => [],
+        'classification' => 'Inconclusive',
+        'score' => null,
+        'gate_reasons' => ['Belum ada artefak eksperimen ESP32 pada contoh schema.'],
     ],
     'evidence_contract' => [
-        'detected_allowed' => true,
+        'detected_allowed' => false,
         'detected_label' => 'Attack Detected',
     ],
 ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
@@ -179,26 +180,21 @@
     'model_name' => 'Groq Llama',
     'tool_profile' => 'loic',
     'attack_pattern' => 'http_flood',
-    'classification' => 'Attack Detected',
-    'confidence_score' => 87,
-    'reason' => 'Traffic menunjukkan banyak koneksi HTTP berdurasi panjang dengan throughput rendah dan alert Snort meningkat pada rentang waktu yang sama.',
-    'supporting_indicators' => [
-        'Long-lived HTTP connections',
-        'Low bandwidth but high connection count',
-        'Snort alert correlation',
-        'Deviation from baseline traffic',
-    ],
-    'missing_evidence' => ['Raw HTTP header completion timing belum tersedia'],
+    'classification' => 'Inconclusive',
+    'confidence_score' => 0,
+    'reason' => 'Contoh schema tidak memuat pengukuran ESP32 dan tidak boleh diklasifikasikan sebagai serangan.',
+    'supporting_indicators' => [],
+    'missing_evidence' => ['PCAP ESP32', 'hasil Snort', 'metrics before/after'],
     'logic_comparison' => [
-        'logic_classification' => 'Attack Detected',
-        'logic_score' => 88.4,
+        'logic_classification' => 'Inconclusive',
+        'logic_score' => null,
         'agreement' => 'match',
     ],
     'chart_data' => [
-        'confidence' => 87,
-        'evidence_counts' => ['present' => 4, 'missing' => 1, 'blocking' => 0],
+        'confidence' => 0,
+        'evidence_counts' => ['present' => 0, 'missing' => 3, 'blocking' => 1],
     ],
-    'recommendation' => 'Tambahkan fitur ekstraksi waktu antar-header dan bandingkan dengan baseline normal.',
+    'recommendation' => 'Jalankan eksperimen ESP32 nyata dan impor artefaknya sebelum analisis.',
 ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
     </div>
 
@@ -220,8 +216,8 @@
 <div class="card mt-4">
     <div class="card-header"><p class="card-title">Catatan Objek Penelitian</p></div>
     <div class="p-5 text-sm text-slate-300 space-y-2">
-        <p>Aplikasi tidak mengarang data target. Selama dataset lab masih berasal dari VM Ubuntu Server, field target platform disimpan sebagai VM Ubuntu Server.</p>
-        <p>Narasi laporan akhir boleh menjelaskan objek penelitian berupa ESP32/IoT drone hanya jika skenario pengambilan data dan metadata eksperimen memang memuat konteks tersebut.</p>
+        <p>Aplikasi tidak mengarang data target. Eksperimen baru hanya disebut ESP32 setelah artefak host dan metadata runtime berhasil diimpor.</p>
+        <p>Dataset lama tetap berlabel VM Ubuntu Server dan tidak pernah direlabel menjadi bukti ESP32.</p>
     </div>
 </div>
 

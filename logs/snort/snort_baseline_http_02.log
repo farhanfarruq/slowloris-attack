@@ -1,0 +1,225 @@
+--------------------------------------------------
+o")~   Snort++ 3.12.2.0
+--------------------------------------------------
+Loading /usr/local/etc/snort/snort.lua:
+Loading snort_defaults.lua:
+Finished snort_defaults.lua:
+	ftp_client
+	classifications
+	references
+	binder
+	wizard
+	appid
+	js_norm
+	file_policy
+	host_cache
+	http_inspect
+	smtp
+	port_scan
+	gtp_inspect
+	dce_http_server
+	dce_http_proxy
+	dce_tcp
+	active
+	iec104
+	dnp3
+	daq
+	telnet
+	ssl
+	ips
+	file_inspect
+	host_tracker
+	hosts
+	network
+	search_engine
+	process
+	packets
+	stream_icmp
+	stream
+	stream_ip
+	stream_tcp
+	stream_udp
+	stream_user
+	stream_file
+	arp_spoof
+	back_orifice
+	dns
+	imap
+	netflow
+	normalizer
+	pop
+	rpc_decode
+	sip
+	socks
+	ssh
+	cip
+	mms
+	modbus
+	opcua
+	s7commplus
+	dce_smb
+	dce_udp
+	ftp_server
+	ftp_data
+	http2_inspect
+	output
+	alerts
+	decode
+Finished /usr/local/etc/snort/snort.lua:
+Loading file_inspect.rules_file:
+Loading file_magic.rules:
+Finished file_magic.rules:
+Finished file_inspect.rules_file:
+--------------------------------------------------
+ips policies rule stats
+              id  loaded  shared enabled    file
+               1     219       0     219    /usr/local/etc/snort/snort.lua
+--------------------------------------------------
+rule counts
+       total rules loaded: 219
+               text rules: 219
+            option chains: 219
+            chain headers: 1
+--------------------------------------------------
+service rule counts          to-srv  to-cli
+                  file_id:      219     219
+                    total:      219     219
+--------------------------------------------------
+fast pattern groups
+                to_server: 1
+                to_client: 1
+--------------------------------------------------
+search engine (ac_bnfa)
+                instances: 2
+                 patterns: 438
+            pattern chars: 2602
+               num states: 1832
+         num match states: 392
+             memory scale: KB
+             total memory: 71.2812
+           pattern memory: 19.6484
+        match list memory: 28.4375
+        transition memory: 22.9453
+appid: MaxRss diff: 3232
+appid: patterns loaded: 300
+--------------------------------------------------
+pcap DAQ configured to read-file.
+Commencing packet processing
+Retry queue interval is: 200 ms
+++ [0] baseline_http_02.pcapng
+-- [0] baseline_http_02.pcapng
+--------------------------------------------------
+Packet Statistics
+--------------------------------------------------
+daq
+                    pcaps: 1
+                 received: 34
+                 analyzed: 34
+                    allow: 34
+                 rx_bytes: 2703
+--------------------------------------------------
+codec
+                    total: 34          	(100.000%)
+                      eth: 34          	(100.000%)
+                     ipv4: 34          	(100.000%)
+                      tcp: 34          	(100.000%)
+--------------------------------------------------
+Module Statistics
+--------------------------------------------------
+ac_bnfa
+                 searches: 3
+                  matches: 5
+                    bytes: 290
+--------------------------------------------------
+ac_full
+                 searches: 23
+                  matches: 21
+                    bytes: 434
+--------------------------------------------------
+appid
+                  packets: 34
+        processed_packets: 34
+           total_sessions: 3
+       service_cache_adds: 1
+             bytes_in_use: 168
+             items_in_use: 1
+--------------------------------------------------
+binder
+                new_flows: 3
+          service_changes: 3
+                 inspects: 3
+--------------------------------------------------
+detection
+                 analyzed: 34
+            file_searches: 3
+--------------------------------------------------
+file_inspect
+              total_files: 3
+          total_file_data: 290
+     max_concurrent_files: 1
+--------------------------------------------------
+http_inspect
+                    flows: 3
+                    scans: 15
+              reassembles: 15
+              inspections: 15
+                 requests: 3
+                responses: 3
+             get_requests: 3
+  max_concurrent_sessions: 1
+              total_bytes: 747
+--------------------------------------------------
+port_scan
+                  packets: 34
+                 trackers: 2
+--------------------------------------------------
+search_engine
+               max_queued: 5
+            total_flushed: 3
+            total_inserts: 5
+             total_unique: 3
+     non_qualified_events: 3
+--------------------------------------------------
+stream
+                    flows: 3
+             total_prunes: 3
+             flows_closed: 3
+--------------------------------------------------
+stream_tcp
+                 sessions: 3
+                      max: 3
+                  created: 3
+                 released: 3
+             instantiated: 3
+                   setups: 3
+                 restarts: 3
+             syn_trackers: 3
+              segs_queued: 9
+            segs_released: 9
+                segs_used: 9
+          rebuilt_packets: 15
+            rebuilt_bytes: 783
+                     syns: 3
+                 syn_acks: 3
+                     fins: 6
+                 max_segs: 2
+                max_bytes: 251
+--------------------------------------------------
+wizard
+                tcp_scans: 3
+                 tcp_hits: 3
+--------------------------------------------------
+Appid Statistics
+--------------------------------------------------
+detected apps and services
+              Application: Services   Clients    Users      Payloads   Misc       Referred  
+                  unknown: 3          3          0          3          0          0         
+--------------------------------------------------
+Summary Statistics
+--------------------------------------------------
+timing
+                  runtime: 00:00:00
+                  seconds: 0.033547
+                 pkts/sec: 1014
+                Mbits/sec: 1
+o")~   Snort exiting

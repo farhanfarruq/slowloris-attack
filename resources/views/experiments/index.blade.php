@@ -39,15 +39,16 @@
             </select>
             <select name="target_platform" class="input-field max-w-xs">
                 <option value="">Semua target</option>
-                <option value="vm_ubuntu_server" @selected(request('target_platform')==='vm_ubuntu_server')>VM Ubuntu Server</option>
+                <option value="esp32" @selected(request('target_platform')==='esp32')>ESP32 Fisik</option>
+                <option value="vm_ubuntu_server" @selected(request('target_platform')==='vm_ubuntu_server')>VM Ubuntu Server (Historis)</option>
             </select>
             <button type="submit" class="btn-primary">Cari</button>
         </form>
         @auth
             @if (auth()->user()->isAdmin())
-                <form action="{{ route('experiments.vm-drafts') }}" method="POST">
+                <form action="{{ route('experiments.esp32-drafts') }}" method="POST">
                     @csrf
-                    <button type="submit" class="btn-secondary">Draft VM Profile</button>
+                    <button type="submit" class="btn-secondary">Draft ESP32 Profile</button>
                 </form>
                 <a href="{{ route('experiments.create') }}" class="btn-primary"><x-icon name="plus" class="w-4 h-4"/> Eksperimen Baru</a>
             @endif

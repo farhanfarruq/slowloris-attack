@@ -89,8 +89,8 @@
         </div>
         <div>
             <label class="label-field">Target Platform</label>
-            <input name="target_platform" type="text" class="input-field" value="{{ old('target_platform', 'vm_ubuntu_server') }}">
-            <p class="text-[11px] text-slate-500 mt-1">Testing saat ini memakai VM Ubuntu Server. ESP32/drone hanya ditulis jika datanya tersedia.</p>
+            <input name="target_platform" type="text" readonly class="input-field" value="esp32">
+            <p class="text-[11px] text-slate-500 mt-1">Target runtime baru adalah ESP32 fisik. Record VM lama tetap dipertahankan sebagai historis.</p>
         </div>
         <div>
             <label class="label-field">Ground Truth Label</label>
@@ -103,11 +103,11 @@
         </div>
         <div>
             <label class="label-field">Network Interface</label>
-            <input name="network_interface" type="text" class="input-field" placeholder="enp0s3">
+            <input name="network_interface" type="text" class="input-field" value="{{ old('network_interface', config('esp32.capture_interface')) }}">
         </div>
         <div>
             <label class="label-field">IP Target Lab</label>
-            <input name="target_ip" type="text" class="input-field" placeholder="192.168.56.10">
+            <input name="target_ip" type="text" class="input-field" value="{{ old('target_ip', config('esp32.host')) }}">
         </div>
         <div>
             <label class="label-field">IP Sumber Traffic</label>
