@@ -139,28 +139,35 @@ class AnalysisService
     {
         $features = $experiment->extractedFeature;
         $toolProfile = $this->toolProfiles->normalize($experiment->tool_profile ?? null);
+        $persistedRaw = is_array($features?->raw_features) ? $features->raw_features : [];
+        $featureValues = $features
+            ? array_merge($persistedRaw, $features->toArray())
+            : $this->scoring->buildFeatures($experiment);
         $radar = $features
             ? $features->radarScores()
-            : ($this->scoring->computeRadarScores($this->scoring->buildFeatures($experiment), $toolProfile));
+            : $this->scoring->computeRadarScores($featureValues, $toolProfile);
 
         // Hilangkan ai_confidence_score karena belum dihitung sebelum kirim ke AI
         $radarForAi = $radar;
         unset($radarForAi['ai_confidence_score']);
 
         $packetSummary = [
-            'total_packets'   => (int) ($features?->total_packets ?? 0),
-            'tcp_packets'     => (int) ($features?->tcp_packets ?? 0),
-            'http_packets'    => (int) ($features?->http_packets ?? 0),
-            'avg_packet_size' => (float) ($features?->avg_packet_size ?? 0),
-            'duration_seconds'=> (int) ($features?->duration_seconds ?? 0),
+            'total_packets'   => (int) ($featureValues['total_packets'] ?? 0),
+            'tcp_packets'     => (int) ($featureValues['tcp_packets'] ?? 0),
+            'http_packets'    => (int) ($featureValues['http_packets'] ?? 0),
+            'udp_packets'     => (int) ($featureValues['udp_packets'] ?? 0),
+            'icmp_packets'    => (int) ($featureValues['icmp_packets'] ?? 0),
+            'avg_packet_size' => (float) ($featureValues['avg_packet_size'] ?? 0),
+            'duration_seconds'=> (int) ($featureValues['duration_seconds'] ?? 0),
         ];
 
         $connectionSummary = [
-            'total_connections'             => (int) ($features?->total_connections ?? 0),
-            'long_lived_connections'        => (int) ($features?->long_lived_connections ?? 0),
-            'avg_connection_duration_seconds'=> (float) ($features?->avg_connection_duration ?? 0),
-            'connections_to_http_port'      => (int) ($features?->connections_to_http_port ?? 0),
-            'throughput_kbps'               => (float) ($features?->throughput_kbps ?? 0),
+            'total_connections'             => (int) ($featureValues['total_connections'] ?? 0),
+            'long_lived_connections'        => (int) ($featureValues['long_lived_connections'] ?? 0),
+            'avg_connection_duration_seconds'=> (float) ($featureValues['avg_connection_duration'] ?? 0),
+            'connections_to_http_port'      => (int) ($featureValues['connections_to_http_port'] ?? 0),
+            'throughput_kbps'               => (float) ($featureValues['throughput_kbps'] ?? 0),
+            'half_open_connections'          => (int) ($featureValues['half_open_connections'] ?? 0),
         ];
 
         $acq = $this->scoring->selectAcquisition($experiment);
@@ -178,10 +185,17 @@ class AnalysisService
         ];
 
         $baselineSummary = [
-            'normal_avg_connections' => $features?->baseline_avg_connections ?? ScoringService::BASELINE_DEFAULT_CONNECTIONS,
-            'normal_throughput_kbps' => $features?->baseline_throughput_kbps ?? ScoringService::BASELINE_DEFAULT_THROUGHPUT,
-            'normal_alert_count'     => $features?->baseline_alert_count ?? ScoringService::BASELINE_DEFAULT_ALERTS,
+            'normal_avg_connections' => $featureValues['baseline_avg_connections'] ?? ScoringService::BASELINE_DEFAULT_CONNECTIONS,
+            'normal_throughput_kbps' => $featureValues['baseline_throughput_kbps'] ?? ScoringService::BASELINE_DEFAULT_THROUGHPUT,
+            'normal_alert_count'     => $featureValues['baseline_alert_count'] ?? ScoringService::BASELINE_DEFAULT_ALERTS,
         ];
+
+        $rawFeatures = $features ? $persistedRaw : $featureValues;
+        if (!$features) {
+            $evaluation = $this->scoring->evaluateExperiment($experiment, $featureValues, $radar, $toolProfile);
+            $rawFeatures['evidence_gates'] = $evaluation['evidence_gates'];
+            $rawFeatures['gate_reasons'] = $evaluation['gate_reasons'];
+        }
 
         $evidenceContract = $this->buildAiEvidenceContract(
             $experiment,
@@ -189,18 +203,8 @@ class AnalysisService
             $connectionSummary,
             $snortAlertSummary,
             $radarForAi,
-            is_array($features?->raw_features) ? $features->raw_features : [],
+            $rawFeatures,
         );
-        $logicAnalysis = [
-            'classification' => $features?->attack_category ?? 'Inconclusive',
-            'score' => (float) ($features?->final_attack_score ?? 0),
-            'gate_reasons' => is_array($features?->raw_features)
-                ? ($features->raw_features['gate_reasons'] ?? [])
-                : [],
-            'evidence_gates' => is_array($features?->raw_features)
-                ? ($features->raw_features['evidence_gates'] ?? [])
-                : [],
-        ];
 
         return [
             'experiment_id'         => $experiment->experiment_code,
@@ -223,17 +227,14 @@ class AnalysisService
             'connection_summary'    => $connectionSummary,
             'snort_alert_summary'   => $snortAlertSummary,
             'baseline_summary'      => $baselineSummary,
-            'extracted_features'    => $features ? array_intersect_key(
-                $features->toArray(),
+            'extracted_features'    => array_intersect_key(
+                $featureValues,
                 array_flip([
-                    'total_packets','tcp_packets','http_packets','total_connections',
+                    'total_packets','tcp_packets','udp_packets','icmp_packets','http_packets','total_connections',
                     'avg_connection_duration','throughput_kbps','total_alerts',
                 ])
-            ) : [],
-            'radar_score'           => $radarForAi,
-            'logic_analysis'        => $logicAnalysis,
+            ),
             'evidence_contract'     => $evidenceContract,
-            'suspected_attack_type' => $features?->attack_category ?? 'Unknown',
         ];
     }
 
@@ -323,7 +324,6 @@ class AnalysisService
             'checks' => $checks,
             'combined_evidence_count' => $combinedEvidenceCount,
             'gate_reasons' => $rawFeatures['gate_reasons'] ?? [],
-            'final_decision' => $rawFeatures['final_decision'] ?? null,
         ];
     }
 }

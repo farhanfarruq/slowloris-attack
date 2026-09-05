@@ -22,6 +22,43 @@ class AnalysisServiceTest extends TestCase
 {
     use RefreshDatabase;
 
+public function test_ai_payload_reads_uploaded_evidence_without_exposing_logic_score(): void
+{
+    $experiment = $this->createExperimentWithFiles(
+        scenarioKey: 'slow-http',
+        groundTruth: 'unknown',
+        acquisitionAttrs: [
+            'total_packets' => 252,
+            'tcp_packets' => 252,
+            'http_packets' => 144,
+            'avg_packet_size' => 120,
+            'total_connections' => 36,
+            'avg_connection_duration' => 90,
+            'half_open_connections' => 36,
+            'parsed_summary' => [
+                'duration' => 90,
+                'throughput_kbps' => 5,
+                'long_lived_connections' => 36,
+                'connections_to_http_port' => 36,
+            ],
+        ],
+        validationAttrs: [
+            'total_alerts' => 78,
+            'parsed_summary' => ['severity_count' => ['high' => 18, 'medium' => 60, 'low' => 0]],
+            'dominant_alert_type' => 'Possible Slow HTTP or Slowloris traffic',
+        ],
+    );
+
+    $payload = app(AnalysisService::class)->buildAiPayload($experiment);
+
+    $this->assertSame(252, $payload['packet_summary']['total_packets']);
+    $this->assertSame(36, $payload['connection_summary']['total_connections']);
+    $this->assertSame(78, $payload['snort_alert_summary']['total_alerts']);
+    $this->assertArrayNotHasKey('logic_analysis', $payload);
+    $this->assertArrayNotHasKey('suspected_attack_type', $payload);
+    $this->assertArrayNotHasKey('radar_score', $payload);
+}
+
     public function test_analyze_marks_http_burst_as_suspicious_not_attack(): void
     {
         $experiment = $this->createExperimentWithFiles(

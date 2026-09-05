@@ -10,13 +10,17 @@ declare(strict_types=1);
  */
 final class OfflineLabArtifactGenerator
 {
-    private const SOURCE_IP = '198.18.0.10';
-    private const TARGET_IP = '198.18.0.20';
     private const START_EPOCH = 1787191200.0; // 2026-08-20T02:00:00Z
 
     /** @var array<int, array{time: float, frame: string}> */
     private array $packets = [];
     private int $ipId = 1;
+
+    public function __construct(
+        private readonly string $sourceIp = '198.18.0.10',
+        private readonly string $targetIp = '198.18.0.20',
+        private readonly string $targetPlatform = 'synthetic_lab',
+    ) {}
 
     /** @return array<string, array{label: string, profile: string, attack_pattern: string, indicators: list<string>, alert_groups: list<array{count: int, message: string, priority: int, protocol: string, port: int}>}> */
     private function scenarios(): array
@@ -119,7 +123,14 @@ final class OfflineLabArtifactGenerator
     {
         $outputDirectory = rtrim($outputDirectory, DIRECTORY_SEPARATOR);
         $this->ensureDirectory($outputDirectory);
-        $manifest = ['is_simulated' => true, 'generation_mode' => 'offline_packet_synthesis', 'scenarios' => []];
+        $manifest = [
+            'is_simulated' => true,
+            'generation_mode' => 'offline_packet_synthesis',
+            'target_platform' => $this->targetPlatform,
+            'source_ip' => $this->sourceIp,
+            'target_ip' => $this->targetIp,
+            'scenarios' => [],
+        ];
         $scenarios = $this->scenarios();
         if ($scenarioKey !== null) {
             if (!isset($scenarios[$scenarioKey])) {
@@ -141,13 +152,14 @@ final class OfflineLabArtifactGenerator
             $summary = [
                 'is_simulated' => true,
                 'generation_mode' => 'offline_packet_synthesis',
+                'target_platform' => $this->targetPlatform,
                 'scenario_key' => $key,
                 'label' => $scenario['label'],
                 'tool_profile' => $scenario['profile'],
                 'attack_pattern' => $scenario['attack_pattern'],
                 'expected_decision' => $scenario['expected_decision'],
-                'source_ip' => self::SOURCE_IP,
-                'target_ip' => self::TARGET_IP,
+                'source_ip' => $this->sourceIp,
+                'target_ip' => $this->targetIp,
                 'indicators' => $scenario['indicators'],
                 'packet_count' => count($this->packets),
                 'alert_count' => $alertCount,
@@ -233,7 +245,7 @@ final class OfflineLabArtifactGenerator
             $time = self::START_EPOCH + ($offset * 0.03);
             $sourcePort = 54000 + $offset;
             $this->tcp($time, $sourcePort, $port, 2000 + $offset, 0, 0x002);
-            $this->tcp($time + 0.002, $port, $sourcePort, 8000 + $offset, 2001 + $offset, 0x014, self::TARGET_IP, self::SOURCE_IP);
+            $this->tcp($time + 0.002, $port, $sourcePort, 8000 + $offset, 2001 + $offset, 0x014, $this->targetIp, $this->sourceIp);
         }
     }
 
@@ -241,7 +253,7 @@ final class OfflineLabArtifactGenerator
     {
         $this->tcpFlow(self::START_EPOCH, 55000, 5201, [], null, false);
         for ($i = 0; $i < 300; $i++) {
-            $this->tcp(self::START_EPOCH + 0.02 + ($i * 0.003), 55000, 5201, 9000 + ($i * 1200), 1, 0x018, self::SOURCE_IP, self::TARGET_IP, str_repeat('I', 1200));
+            $this->tcp(self::START_EPOCH + 0.02 + ($i * 0.003), 55000, 5201, 9000 + ($i * 1200), 1, 0x018, $this->sourceIp, $this->targetIp, str_repeat('I', 1200));
         }
     }
 
@@ -251,29 +263,31 @@ final class OfflineLabArtifactGenerator
         $clientSeq = 10000 + $sourcePort;
         $serverSeq = 50000 + $sourcePort;
         $this->tcp($start, $sourcePort, $destinationPort, $clientSeq, 0, 0x002);
-        $this->tcp($start + 0.002, $destinationPort, $sourcePort, $serverSeq, $clientSeq + 1, 0x012, self::TARGET_IP, self::SOURCE_IP);
+        $this->tcp($start + 0.002, $destinationPort, $sourcePort, $serverSeq, $clientSeq + 1, 0x012, $this->targetIp, $this->sourceIp);
         $this->tcp($start + 0.004, $sourcePort, $destinationPort, $clientSeq + 1, $serverSeq + 1, 0x010);
         $clientSeq++;
         $last = $start + 0.004;
         foreach ($payloads as [$offset, $payload]) {
             $time = $start + $offset;
-            $this->tcp($time, $sourcePort, $destinationPort, $clientSeq, $serverSeq + 1, 0x018, self::SOURCE_IP, self::TARGET_IP, $payload);
+            $this->tcp($time, $sourcePort, $destinationPort, $clientSeq, $serverSeq + 1, 0x018, $this->sourceIp, $this->targetIp, $payload);
             $clientSeq += strlen($payload);
             $last = $time;
         }
         if ($response !== null) {
-            $this->tcp($last + 0.003, $destinationPort, $sourcePort, $serverSeq + 1, $clientSeq, 0x018, self::TARGET_IP, self::SOURCE_IP, $response);
+            $this->tcp($last + 0.003, $destinationPort, $sourcePort, $serverSeq + 1, $clientSeq, 0x018, $this->targetIp, $this->sourceIp, $response);
             $serverSeq += strlen($response);
             $last += 0.003;
         }
         if ($close) {
             $this->tcp($last + 0.004, $sourcePort, $destinationPort, $clientSeq, $serverSeq + 1, 0x011);
-            $this->tcp($last + 0.006, $destinationPort, $sourcePort, $serverSeq + 1, $clientSeq + 1, 0x011, self::TARGET_IP, self::SOURCE_IP);
+            $this->tcp($last + 0.006, $destinationPort, $sourcePort, $serverSeq + 1, $clientSeq + 1, 0x011, $this->targetIp, $this->sourceIp);
         }
     }
 
-    private function tcp(float $time, int $sourcePort, int $destinationPort, int $sequence, int $acknowledgement, int $flags, string $source = self::SOURCE_IP, string $destination = self::TARGET_IP, string $payload = ''): void
+    private function tcp(float $time, int $sourcePort, int $destinationPort, int $sequence, int $acknowledgement, int $flags, ?string $source = null, ?string $destination = null, string $payload = ''): void
     {
+        $source ??= $this->sourceIp;
+        $destination ??= $this->targetIp;
         $header = pack('nnNNnnnn', $sourcePort, $destinationPort, $sequence, $acknowledgement, 0x5000 | $flags, 64240, 0, 0);
         $segment = $header.$payload;
         $pseudo = inet_pton($source).inet_pton($destination).pack('CCn', 0, 6, strlen($segment));
@@ -284,14 +298,14 @@ final class OfflineLabArtifactGenerator
     private function udp(float $time, int $sourcePort, int $destinationPort, string $payload): void
     {
         $segment = pack('nnnn', $sourcePort, $destinationPort, 8 + strlen($payload), 0).$payload;
-        $this->packet($time, self::SOURCE_IP, self::TARGET_IP, 17, $segment);
+        $this->packet($time, $this->sourceIp, $this->targetIp, 17, $segment);
     }
 
     private function icmp(float $time, int $sequence): void
     {
         $body = pack('CCnnn', 8, 0, 0, 1, $sequence).str_repeat('P', 32);
         $body = substr_replace($body, pack('n', $this->checksum($body)), 2, 2);
-        $this->packet($time, self::SOURCE_IP, self::TARGET_IP, 1, $body);
+        $this->packet($time, $this->sourceIp, $this->targetIp, 1, $body);
     }
 
     private function packet(float $time, string $source, string $destination, int $protocol, string $payload): void
@@ -328,7 +342,7 @@ final class OfflineLabArtifactGenerator
                 $second = str_pad((string) (($count + $i) % 60), 2, '0', STR_PAD_LEFT);
                 $sourcePort = 40000 + (($count + $i) % 2000);
                 $destination = $group['port'] === 0 ? '0' : (string) $group['port'];
-                $lines[] = "08/20-09:00:{$second}.000  [**] [1:".(900000 + $groupIndex).":1] {$group['message']} [**] [Classification: Simulation] [Priority: {$group['priority']}] {{$group['protocol']}} ".self::SOURCE_IP.":{$sourcePort} -> ".self::TARGET_IP.":{$destination}";
+                $lines[] = "08/20-09:00:{$second}.000  [**] [1:".(900000 + $groupIndex).":1] {$group['message']} [**] [Classification: Simulation] [Priority: {$group['priority']}] {{$group['protocol']}} {$this->sourceIp}:{$sourcePort} -> {$this->targetIp}:{$destination}";
             }
             $count += $group['count'];
         }
@@ -370,7 +384,13 @@ if (realpath((string) ($_SERVER['SCRIPT_FILENAME'] ?? '')) === __FILE__) {
     $root = dirname(__DIR__, 2);
     $output = $argv[1] ?? "{$root}/storage/app/simulated-lab";
     $scenario = $argv[2] ?? null;
-    $manifest = (new OfflineLabArtifactGenerator())->generate($output, $scenario);
+    $topology = getenv('LAB_TOPOLOGY') ?: 'benchmark';
+    $generator = match ($topology) {
+        'benchmark' => new OfflineLabArtifactGenerator(),
+        'esp32' => new OfflineLabArtifactGenerator('192.168.4.2', '192.168.4.1', 'esp32'),
+        default => throw new InvalidArgumentException("Unknown LAB_TOPOLOGY: {$topology}"),
+    };
+    $manifest = $generator->generate($output, $scenario);
 
     echo "SIMULATION_ARTIFACTS_CREATED\n";
     foreach ($manifest['scenarios'] as $key => $scenario) {

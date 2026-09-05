@@ -11,6 +11,8 @@ class AiPromptBuilder
 
     public function build(array $payload): array
     {
+        unset($payload['logic_analysis'], $payload['suspected_attack_type'], $payload['radar_score']);
+
         $toolProfile = $this->profiles->normalize($payload['tool_profile'] ?? null);
         $profile = $this->profiles->get($toolProfile);
         $detectedLabel = $this->profiles->detectedLabel($toolProfile);
@@ -26,12 +28,6 @@ class AiPromptBuilder
             ],
             'missing_evidence' => ['teks bahasa Indonesia yang menyebut bukti hilang atau lemah'],
             'false_positive_considerations' => ['teks bahasa Indonesia yang menyebut penjaga positif palsu yang relevan'],
-            'logic_comparison' => [
-                'logic_classification' => 'string',
-                'logic_score' => 'angka',
-                'agreement' => 'match|partial|conflict|blocked_by_evidence_gate',
-                'explanation' => 'teks bahasa Indonesia',
-            ],
             'chart_data' => [
                 'indicator_scores' => [['label' => 'teks bahasa Indonesia', 'score' => 'angka']],
                 'evidence_counts' => ['present' => 'angka', 'missing' => 'angka', 'blocking' => 'angka'],
@@ -42,7 +38,7 @@ class AiPromptBuilder
 
         $system = "Anda adalah analis forensik jaringan defensif untuk riset DDoS di lab terkontrol.\n"
             . "Kembalikan JSON saja. Jangan sertakan markdown.\n"
-            . "Semua teks naratif pada keluaran wajib berbahasa Indonesia: reason, interpretation, missing_evidence, false_positive_considerations, logic_comparison.explanation, chart_data.indicator_scores.label, dan recommendation.\n"
+            . "Semua teks naratif pada keluaran wajib berbahasa Indonesia: reason, interpretation, missing_evidence, false_positive_considerations, chart_data.indicator_scores.label, dan recommendation.\n"
             . "Pengecualian hanya untuk nama field JSON, path field payload, nilai enum kontrak, label klasifikasi, nama tool, nama protokol, nama rule, IP, timestamp, dan angka yang memang berasal dari payload.\n"
             . "Analisis hanya tool profile DDoS yang dinyatakan di payload.tool_profile: {$toolProfile}.\n"
             . "Tool profile adalah identitas penelitian. Attack pattern hanya konteks bukti teknis.\n"
@@ -57,7 +53,7 @@ class AiPromptBuilder
             . "Penjaga positif palsu: " . implode(', ', $profile['false_positive_guards'] ?? []) . "\n"
             . "Skema keluaran: " . json_encode($schema, JSON_UNESCAPED_UNICODE);
 
-        $user = "Analisis payload lab defensif berikut dan bandingkan analisis AI dengan skoring logic program. Jawab dengan JSON valid saja, dan seluruh teks naratif di dalam JSON harus berbahasa Indonesia.\n\n"
+        $user = "Analisis payload lab defensif berikut secara mandiri. Jawab dengan JSON valid saja, dan seluruh teks naratif di dalam JSON harus berbahasa Indonesia.\n\n"
             . json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
         return ['system' => $system, 'user' => $user];

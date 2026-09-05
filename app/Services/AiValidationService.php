@@ -79,6 +79,7 @@ class AiValidationService
 
     public function runForExperiment(Experiment $experiment, array $providerKeys): array
     {
+        $logicFeatures = $experiment->extractedFeature;
         $payload = $this->analysis->buildAiPayload($experiment);
         $validationRunId = (string) Str::uuid();
         $results = [];
@@ -109,9 +110,11 @@ class AiValidationService
                 'model_version'        => $config['model'] ?? null,
                 'classification'       => $response['classification'],
                 'confidence_score'     => (float) $response['confidence_score'],
-                'logic_classification' => $payload['logic_analysis']['classification'] ?? null,
-                'logic_score'          => $payload['logic_analysis']['score'] ?? null,
-                'logic_gate_reasons'   => $payload['logic_analysis']['gate_reasons'] ?? [],
+                'logic_classification' => $logicFeatures?->attack_category,
+                'logic_score'          => $logicFeatures?->final_attack_score,
+                'logic_gate_reasons'   => is_array($logicFeatures?->raw_features)
+                    ? ($logicFeatures->raw_features['gate_reasons'] ?? [])
+                    : [],
                 'ai_chart_data'        => $response['chart_data'] ?? $this->defaultAiChartData($response),
                 'reason'               => $response['reason'] ?? null,
                 'supporting_indicators'=> $response['supporting_indicators'] ?? [],
@@ -133,29 +136,13 @@ class AiValidationService
             $results[] = $ai;
         }
 
-        // Only "Slowloris Detected" confidence may increase the Slowloris score.
-        // "Suspicious"/"Normal"/"Inconclusive" confidence means the model is confident in
-        // those labels, NOT that the traffic is a Slowloris attack.
+        // Simpan confidence AI sebagai hasil pembanding; jangan ubah skor logic aplikasi.
         $features = $experiment->extractedFeature;
         if ($features) {
             $features->ai_confidence_score = $this->attackConfidenceAverage($results);
-            $radar = $features->radarScores();
-
-            // Hormati evidence gating: AI tidak boleh men-trigger attack_detected sendirian.
-            $scoring = new ScoringService($this->toolProfiles);
-            $rawFeatures = $this->buildRawFeaturesFromExtracted($features);
-            $evaluation = $scoring->evaluateExperiment($experiment, $rawFeatures, $radar, $toolProfile);
-
-            $features->final_attack_score = $evaluation['final_attack_score'];
-            $features->attack_category    = $evaluation['attack_category'];
             $features->save();
-
-            $experiment->update([
-                'status'            => 'ai_validated',
-                'experiment_status' => $evaluation['experiment_status'],
-            ]);
         }
-
+        $experiment->update(['status' => 'ai_validated']);
         return $results;
     }
 
@@ -193,37 +180,6 @@ class AiValidationService
         return round($attackResults->avg('confidence_score') ?? 0, 2);
     }
 
-    /**
-     * Recreate raw features array shape from a persisted ExtractedFeature
-     * so that ScoringService::evaluateExperiment() can re-run gate evaluation.
-     */
-    private function buildRawFeaturesFromExtracted(\App\Models\ExtractedFeature $f): array
-    {
-        $raw = is_array($f->raw_features) ? $f->raw_features : [];
-
-        return array_merge($raw, [
-            'total_packets'             => (float) ($f->total_packets ?? 0),
-            'tcp_packets'               => (float) ($f->tcp_packets ?? 0),
-            'udp_packets'               => (float) ($raw['udp_packets'] ?? 0),
-            'icmp_packets'              => (float) ($raw['icmp_packets'] ?? 0),
-            'http_packets'              => (float) ($f->http_packets ?? 0),
-            'avg_packet_size'           => (float) ($f->avg_packet_size ?? 0),
-            'duration_seconds'          => (float) ($f->duration_seconds ?? 0),
-            'total_connections'         => (float) ($f->total_connections ?? 0),
-            'long_lived_connections'    => (float) ($f->long_lived_connections ?? 0),
-            'avg_connection_duration'   => (float) ($f->avg_connection_duration ?? 0),
-            'connections_to_http_port'  => (float) ($f->connections_to_http_port ?? 0),
-            'throughput_kbps'           => (float) ($f->throughput_kbps ?? 0),
-            'half_open_connections'     => 0.0,
-            'total_alerts'              => (float) ($f->total_alerts ?? 0),
-            'high_severity_alerts'      => (float) ($f->high_severity_alerts ?? 0),
-            'medium_severity_alerts'    => (float) ($f->medium_severity_alerts ?? 0),
-            'low_severity_alerts'       => 0.0,
-            'baseline_avg_connections'  => (float) ($f->baseline_avg_connections ?? ScoringService::BASELINE_DEFAULT_CONNECTIONS),
-            'baseline_throughput_kbps'  => (float) ($f->baseline_throughput_kbps ?? ScoringService::BASELINE_DEFAULT_THROUGHPUT),
-            'baseline_alert_count'      => (float) ($f->baseline_alert_count ?? ScoringService::BASELINE_DEFAULT_ALERTS),
-        ]);
-    }
 
     private function isAttackClassification(string $classification, ?string $toolProfile = null): bool
     {

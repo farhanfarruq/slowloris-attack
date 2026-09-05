@@ -81,13 +81,13 @@ Periksa target dari host Ubuntu tanpa scanning:
 php artisan esp32:readiness
 ```
 
-Buat draft ESP32 melalui dashboard, lalu jalankan capture defensif menggunakan kode eksperimen tersebut:
+Buat draft ESP32 melalui dashboard, lalu jalankan capture defensif dari laptop menggunakan kode eksperimen tersebut:
 
 ```bash
-scripts/esp32-lab/run.sh EXP-001 60
+scripts/esp32-lab/capture-and-validate.sh EXP-001 60 --target-host=192.168.4.1 --interface=wlp8s0
 ```
 
-Runner host melakukan readiness, metrics before/after, dumpcap, TShark, Snort offline, hashing, dan import ke Laravel. Runner tidak menghasilkan traffic serangan. Jangan jalankan perintah ini sebelum ESP32 aktif dan laptop tersambung ke `ESP32-LAB`.
+Runner host melakukan readiness, metrics before/after, dumpcap, TShark, Snort offline, hashing, metadata, dan import ke Laravel. Runner tidak menghasilkan traffic serangan. Jangan jalankan perintah ini sebelum ESP32 aktif dan laptop tersambung ke `ESP32-LAB`. Artefak laptop tersimpan di `captures/experiment/<EXP>.pcapng`, `logs/snort/experiment/<EXP>.log`, `logs/snort/experiment/<EXP>/alert_fast.txt`, dan `metadata/experiment/<EXP>.json`.
 
 Panduan VM lama tetap tersedia hanya untuk reproduksi dataset historis; VM bukan target default baru.
 

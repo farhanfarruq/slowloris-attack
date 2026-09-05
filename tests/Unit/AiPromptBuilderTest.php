@@ -12,6 +12,9 @@ class AiPromptBuilderTest extends TestCase
         $prompt = (new AiPromptBuilder())->build([
             'tool_profile' => 'loic',
             'attack_pattern' => 'http_flood',
+            'logic_analysis' => ['classification' => 'LOIC Detected', 'score' => 77],
+            'suspected_attack_type' => 'LOIC Detected',
+            'radar_score' => ['packet_volume_score' => 77],
             'evidence_contract' => ['detected_allowed' => true],
         ]);
 
@@ -22,5 +25,9 @@ class AiPromptBuilderTest extends TestCase
         $this->assertStringContainsString('Analisis perilaku flood berupa volume paket atau request yang tinggi', $prompt['system']);
         $this->assertStringNotContainsString('Do not reuse indicators from another tool profile', $prompt['system']);
         $this->assertStringNotContainsString('Slowloris Detected, Inconclusive', $prompt['system']);
+        $this->assertStringNotContainsString('logic_analysis', $prompt['user']);
+        $this->assertStringNotContainsString('suspected_attack_type', $prompt['user']);
+        $this->assertStringNotContainsString('radar_score', $prompt['user']);
+        $this->assertStringContainsString('secara mandiri', $prompt['user']);
     }
 }

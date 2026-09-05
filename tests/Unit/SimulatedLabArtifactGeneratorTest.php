@@ -12,6 +12,28 @@ require_once __DIR__.'/../../scripts/simulated-lab/generate-artifacts.php';
 
 class SimulatedLabArtifactGeneratorTest extends TestCase
 {
+    public function test_generator_can_label_an_offline_esp32_topology_without_network_access(): void
+    {
+        $directory = sys_get_temp_dir().'/slowloris-esp32-simulated-'.bin2hex(random_bytes(4));
+        $manifest = (new \OfflineLabArtifactGenerator('192.168.4.2', '192.168.4.1', 'esp32'))
+            ->generate($directory, 'slowloris-suspicious');
+
+        try {
+            $this->assertTrue($manifest['is_simulated']);
+            $this->assertSame('offline_packet_synthesis', $manifest['generation_mode']);
+            $this->assertSame('esp32', $manifest['target_platform']);
+            $this->assertSame('192.168.4.2', $manifest['source_ip']);
+            $this->assertSame('192.168.4.1', $manifest['target_ip']);
+            $this->assertStringContainsString('192.168.4.2', file_get_contents("{$directory}/slowloris-suspicious-validation.log"));
+            $this->assertStringContainsString('192.168.4.1', file_get_contents("{$directory}/slowloris-suspicious-validation.log"));
+        } finally {
+            foreach (glob("{$directory}/*") ?: [] as $path) {
+                unlink($path);
+            }
+            rmdir($directory);
+        }
+    }
+
     public function test_offline_generator_writes_parseable_evidence_for_every_profile(): void
     {
         if (trim((string) shell_exec('command -v tshark')) === '') {
